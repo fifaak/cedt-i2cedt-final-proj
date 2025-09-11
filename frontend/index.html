@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ดูดวง</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+    <aside id="sidebar">
+        <h3>ข้อมูลผู้ใช้</h3>
+        <form id="user-info-form">
+            <div class="form-group">
+                <label for="user-name">ชื่อ</label>
+                <input type="text" id="user-name" name="name" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="user-gender">เพศ</label>
+                <select id="user-gender" name="gender">
+                    <option value="" disabled selected>โปรดระบุ</option>
+                    <option value="male">ชาย</option>
+                    <option value="female">หญิง</option>
+                    <option value="other">ไม่ระบุ</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="user-dob">วันเดือนปีเกิด</label>
+                <input type="text" id="user-dob" name="dob" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="horoscope-topic">หัวข้อที่ต้องการดูดวง</label>
+                <select id="horoscope-topic" name="topic">
+                    <option value="overall" selected>ภาพรวม</option>
+                    <option value="career">การงาน</option>
+                    <option value="finance">การเงิน</option>
+                    <option value="love">ความรัก</option>
+                    <option value="health">สุขภาพ</option>
+                </select>
+            </div>
+            <button type="button" id="submit-sidebar-btn">เริ่มแชท</button>
+        </form>
+
+        <div id="history-section">
+            <hr>
+            <h4>ประวัติการแชท</h4>
+            <ul id="history-list">
+                </ul>
+            </div>
+        
+        <hr>
+        <button type="button" id="new-chat-btn">แชทใหม่</button>
+    </aside>
+
+    <header>
+        <h1>ดูดวง</h1>
+    </header>
+    <main id="chat-container"></main>
+    <footer id="input-area">
+        <form id="chat-form">
+            <textarea id="message-input" placeholder="พิมพ์ข้อความ..." rows="1"></textarea>
+            <button type="submit" id="send-btn">ส่ง</button>
+        </form>
+    </footer>
+    <script src="/scripts.js"></script>
+</body>
+</html>
