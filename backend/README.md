@@ -13,8 +13,8 @@ npm run dev
 
 ```
 PORT=3001
-MONGODB_URI=mongodb://localhost:27017/fortune_telling
-TYPHOON_API_KEY=your_api_key_here
+MONGODB_URI=MONGODB_URI
+TYPHOON_API_KEY=TYPHOON_API_KEY
 ```
 
 ## API Endpoints
