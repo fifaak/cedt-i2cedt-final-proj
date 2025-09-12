@@ -20,7 +20,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper function to replace fetch with https module
+// MongoDB connection check middleware
+app.use('/api', (req, res, next) => {
+  if (mongoose.connection.readyState !== 1 && req.path !== '/health') {
+    return res.status(503).json({ 
+      error: "ฐานข้อมูลไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง",
+      details: "Database connection not available"
+    });
+  }
+  next();
+});
+
+// Helper function for HTTPS requests (Node 18+ compatible)
 function makeHttpsRequest(url, options) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
@@ -29,26 +40,43 @@ function makeHttpsRequest(url, options) {
       port: urlObj.port || 443,
       path: urlObj.pathname + urlObj.search,
       method: options.method || 'GET',
-      headers: options.headers || {}
+      headers: {
+        'User-Agent': 'Thai-Fortune-API/1.0',
+        ...options.headers
+      },
+      timeout: 30000 // 30 second timeout
     };
 
     const req = https.request(requestOptions, (res) => {
       let data = '';
+      res.setEncoding('utf8');
+      
       res.on('data', (chunk) => {
         data += chunk;
       });
+      
       res.on('end', () => {
-        resolve({
-          ok: res.statusCode >= 200 && res.statusCode < 300,
-          status: res.statusCode,
-          json: () => Promise.resolve(JSON.parse(data)),
-          text: () => Promise.resolve(data)
-        });
+        try {
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            statusText: res.statusMessage,
+            json: () => Promise.resolve(JSON.parse(data)),
+            text: () => Promise.resolve(data)
+          });
+        } catch (parseError) {
+          reject(new Error(`Failed to parse response: ${parseError.message}`));
+        }
       });
     });
 
     req.on('error', (error) => {
-      reject(error);
+      reject(new Error(`Request failed: ${error.message}`));
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
     });
 
     if (options.body) {
@@ -95,16 +123,36 @@ const fortuneSchema = new mongoose.Schema({
 
 const Fortune = mongoose.model("Fortune", fortuneSchema);
 
-// Connect to MongoDB
-mongoose
-  .connect(
-    process.env.MONGODB_URI || "mongodb://localhost:27017/fortune_telling"
-  )
-  .then(() => console.log("✅ Connected to MongoDB"))
-  .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
-    process.exit(1);
-  });
+// Connect to MongoDB with better error handling
+const connectDB = async () => {
+  try {
+    const mongoURI = process.env.MONGODB_URI || "mongodb://localhost:27017/fortune_telling";
+    console.log("🔄 Attempting to connect to MongoDB...");
+    
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+    });
+    
+    console.log("✅ Connected to MongoDB successfully");
+  } catch (err) {
+    console.error("❌ MongoDB connection error:", err.message);
+    console.log("💡 Suggestions:");
+    console.log("   1. Check if MongoDB is running (local) or cluster is active (Atlas)");
+    console.log("   2. Verify your connection string in .env file");
+    console.log("   3. Check network connectivity");
+    console.log("   4. Ensure IP is whitelisted in MongoDB Atlas");
+    
+    // Don't exit in development, allow server to run without DB
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    } else {
+      console.log("🔄 Server will continue running without database connection");
+    }
+  }
+};
+
+connectDB();
 
 async function getAiPrediction(userInfo, userMessage) {
   const API_KEY = process.env.TYPHOON_API_KEY;
@@ -380,11 +428,22 @@ app.post("/api/chat", async (req, res) => {
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
+  const mongoStatus = {
+    0: "disconnected",
+    1: "connected", 
+    2: "connecting",
+    3: "disconnecting"
+  };
+  
   res.json({
-    status: "OK",
+    status: mongoose.connection.readyState === 1 ? "OK" : "DEGRADED",
     timestamp: new Date().toISOString(),
-    mongodb:
-      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    mongodb: {
+      status: mongoStatus[mongoose.connection.readyState] || "unknown",
+      readyState: mongoose.connection.readyState
+    },
+    nodeVersion: process.version,
+    environment: process.env.NODE_ENV || "development"
   });
 });
 

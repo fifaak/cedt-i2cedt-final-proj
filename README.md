@@ -71,20 +71,44 @@ thai-fortune-app/
 
 ## Prerequisites
 
-- Node.js (v16+)
-- MongoDB
+- **Node.js 18.0.0 or higher** (required)
+- **npm 8.0.0 or higher** (required)
+- MongoDB (local or cloud)
 - Typhoon API key
 
 ## Installation
 
-### 1. Backend Setup
+### Quick Setup (Recommended)
 
 ```bash
-cd backend
-npm install
+# Run the setup script
+./setup.sh
+
+# Or manually:
+npm run install:all
 ```
 
-### 2. Environment Configuration
+### Manual Setup
+
+#### 1. Check Node.js Version
+
+```bash
+node --version  # Should be 18.0.0 or higher
+```
+
+#### 2. Install Dependencies
+
+```bash
+# Install all dependencies
+npm run install:all
+
+# Or install individually:
+npm install                    # Root dependencies
+npm install --prefix backend   # Backend dependencies  
+npm install --prefix frontend  # Frontend dependencies
+```
+
+#### 3. Environment Configuration
 
 Create `.env` file in backend directory:
 
@@ -94,21 +118,18 @@ MONGODB_URI=mongodb://localhost:27017/fortune_telling
 TYPHOON_API_KEY=your_api_key_here
 ```
 
-### 3. Frontend Setup
+#### 4. Launch Application
 
 ```bash
-cd frontend
-npm install
-```
+# Development mode (both servers)
+npm run dev
 
-### 4. Launch Application
+# Or run individually:
+npm run dev:backend   # Backend only (port 3001)
+npm run dev:frontend  # Frontend only (port 3000)
 
-```bash
-# Terminal 1 - Backend
-cd backend && npm run dev
-
-# Terminal 2 - Frontend
-cd frontend && npm run dev
+# Production mode
+npm start
 
 # Visit: http://localhost:3000
 ```
