@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+
+    // --- 1. Constants ---
     const elements = {
         chatForm: document.getElementById('chat-form'),
         messageInput: document.getElementById('message-input'),
@@ -12,7 +14,112 @@ document.addEventListener('DOMContentLoaded', () => {
         newChatBtn: document.getElementById('new-chat-btn'),
         historyList: document.getElementById('history-list'),
         headerTitle: document.querySelector('header h1'),
+        hamburger: document.querySelector('.hamburger')
     };
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.overlay');
+
+    // Improved mobile sidebar handling
+    const toggleMenu = () => {
+        const isOpen = sidebar.classList.contains('active');
+        elements.hamburger.classList.toggle('is-active');
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        document.body.style.overflow = !isOpen ? 'hidden' : '';
+
+        // Accessibility
+        elements.hamburger.setAttribute('aria-expanded', !isOpen);
+        sidebar.setAttribute('aria-hidden', isOpen);
+    };
+
+    if (elements.hamburger) {
+        elements.hamburger.addEventListener('click', toggleMenu);
+        elements.hamburger.setAttribute('aria-expanded', 'false');
+        sidebar.setAttribute('aria-hidden', 'true');
+
+        // Close sidebar when clicking overlay
+        overlay.addEventListener('click', toggleMenu);
+
+        // Handle touch events for sidebar
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let isSwiping = false;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            isSwiping = true;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!isSwiping) return;
+            
+            const currentX = e.changedTouches[0].screenX;
+            const diff = currentX - touchStartX;
+            
+            // Only handle swipes from edge or when menu is open
+            if (touchStartX < 30 || sidebar.classList.contains('active')) {
+                const translateX = sidebar.classList.contains('active') ? 
+                    Math.min(0, diff) : Math.max(-100, diff);
+                sidebar.style.transform = `translateX(${translateX}%)`;
+                
+                // Adjust overlay opacity based on swipe
+                const opacity = sidebar.classList.contains('active') ? 
+                    Math.max(0, 1 - Math.abs(diff) / 200) :
+                    Math.min(1, (diff + 100) / 200);
+                overlay.style.opacity = opacity;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            if (!isSwiping) return;
+            
+            touchEndX = e.changedTouches[0].screenX;
+            const swipeDistance = touchEndX - touchStartX;
+            const SWIPE_THRESHOLD = 50;
+
+            // Reset transitions
+            sidebar.style.transform = '';
+            overlay.style.opacity = '';
+            
+            if (Math.abs(swipeDistance) > SWIPE_THRESHOLD) {
+                if (swipeDistance > 0 && touchStartX < 30) {
+                    toggleMenu(); // Open menu
+                } else if (swipeDistance < 0 && sidebar.classList.contains('active')) {
+                    toggleMenu(); // Close menu
+                }
+            } else {
+                // Reset to previous state if swipe wasn't far enough
+                sidebar.style.transform = sidebar.classList.contains('active') ? 
+                    'translateX(100%)' : 'translateX(0)';
+            }
+            
+            isSwiping = false;
+        }, { passive: true });
+
+        // Handle escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+                toggleMenu();
+            }
+        });
+
+        // Close menu when resizing to desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768 && sidebar.classList.contains('active')) {
+                toggleMenu();
+            }
+        });
+    }
+
+    // Handle mobile keyboard
+    elements.messageInput.addEventListener('focus', () => {
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                window.scrollTo(0, document.body.scrollHeight);
+                elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+            }, 300);
+        }
+    });
 
     const PLACEHOLDERS = {
         DISABLED: 'กรอกข้อมูลด้านซ้ายแล้วกดส่ง',
@@ -20,88 +127,18 @@ document.addEventListener('DOMContentLoaded', () => {
         LOADING: 'อาจารย์คมกำลังเพ่งดวง...',
     };
 
+    // API Base URL - adjust for your deployment
     const API_BASE = 'http://localhost:3001/api';
+
+    // --- 2. State Variables ---
     let isReplying = false;
     let isUserInfoSubmitted = false;
     let currentChatId = null;
     let allHistories = [];
-    let isBackendConnected = false;
 
-    // Check backend connection
-    async function checkBackendConnection() {
-        try {
-            const response = await fetch(`${API_BASE}/health`);
-            if (response.ok) {
-                isBackendConnected = true;
-                console.log('✅ Backend connected');
-                return true;
-            }
-        } catch (error) {
-            console.error('❌ Backend connection failed:', error);
-        }
-        isBackendConnected = false;
-        return false;
-    }
+    // --- 3. Functions ---
 
-    // Show notification
-    function showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 50px;
-            right: 10px;
-            padding: 12px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            z-index: 1001;
-            animation: slideIn 0.3s ease-out;
-            ${type === 'success' ? 
-                'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;' : 
-                type === 'error' ?
-                'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;' :
-                'background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb;'
-            }
-        `;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        // Auto remove after 3 seconds
-        setTimeout(() => notification.remove(), 3000);
-    }
-
-    // Show connection status
-    function showConnectionStatus() {
-        const statusDiv = document.createElement('div');
-        statusDiv.id = 'connection-status';
-        statusDiv.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 1000;
-            ${isBackendConnected ? 
-                'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;' : 
-                'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;'
-            }
-        `;
-        statusDiv.textContent = isBackendConnected ? '🟢 เชื่อมต่อแล้ว' : '🔴 ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์';
-        
-        // Remove existing status
-        const existing = document.getElementById('connection-status');
-        if (existing) existing.remove();
-        
-        document.body.appendChild(statusDiv);
-        
-        // Auto hide after 3 seconds if connected
-        if (isBackendConnected) {
-            setTimeout(() => statusDiv.remove(), 3000);
-        }
-    }
-
-    // Functions
+    // Updated to use Express backend
     async function getAiReply(userMessage, userInfo, historyMessages = []) {
         try {
             const response = await fetch(`${API_BASE}/chat`, {
@@ -129,8 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error("Error fetching AI reply:", error);
-            isBackendConnected = false;
-            showConnectionStatus();
             return "เซิร์ฟเวอร์พลังงานจักรวาลล่ม ติดต่อไม่ได้ ลองใหม่อีกที";
         }
     }
@@ -166,18 +201,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Delete fortune reading from backend
+    async function deleteFortuneFromDB(fortuneId) {
+        try {
+            const response = await fetch(`${API_BASE}/fortune/${fortuneId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                console.error('Failed to delete from database');
+                return false;
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error("Error deleting from database:", error);
+            return false;
+        }
+    }
+
     // Load fortune history from backend
     async function loadFortuneHistory() {
         try {
-            const response = await fetch(`${API_BASE}/fortune`);
+            const response = await fetch(`${API_BASE}/fortune`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
             
             if (!response.ok) {
-                console.error('Failed to load history');
+                console.error('Failed to load history:', response.status);
                 return;
             }
 
             const data = await response.json();
-            const fortunes = data.fortunes || data; // Handle both old and new format
+            const fortunes = data.fortunes || []; // Handle the new API response structure
             
             // Convert to local history format
             allHistories = fortunes.map(fortune => ({
@@ -185,8 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 topic: getTopicDisplayName(fortune.topic),
                 lastMessageTime: new Date(fortune.created_at).toLocaleString('th-TH'),
                 messages: [
-                    { text: fortune.text, type: 'sent' },
-                    { text: fortune.prediction, type: 'received' }
+                    { text: fortune.text || '', type: 'sent' },
+                    { text: fortune.prediction || '', type: 'received' }
                 ],
                 userInfo: {
                     name: fortune.name,
@@ -200,8 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error("Error loading history:", error);
-            isBackendConnected = false;
-            showConnectionStatus();
+            console.log("Response:", error.response);
         }
     }
 
@@ -309,15 +369,91 @@ document.addEventListener('DOMContentLoaded', () => {
         displayHistoryList();
     }
 
+    // Updated displayHistoryList function with delete buttons
     function displayHistoryList() {
         elements.historyList.innerHTML = '';
         allHistories.forEach(chat => {
             const li = document.createElement('li');
             li.dataset.id = chat.id;
-            li.innerHTML = `${chat.topic}<small>${chat.lastMessageTime}</small>`;
-            li.addEventListener('click', () => loadSpecificChat(chat.id));
+            
+            // Create chat info container
+            const chatInfo = document.createElement('div');
+            chatInfo.className = 'chat-info';
+            chatInfo.innerHTML = `${chat.topic}<small>${chat.lastMessageTime}</small>`;
+            chatInfo.addEventListener('click', () => loadSpecificChat(chat.id));
+            
+            // Create delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-chat-btn';
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.title = 'ลบแชทนี้';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering chat load
+                handleDeleteChat(chat.id);
+            });
+            
+            li.appendChild(chatInfo);
+            li.appendChild(deleteBtn);
             elements.historyList.appendChild(li);
         });
+    }
+
+    // Handle chat deletion
+    async function handleDeleteChat(chatId) {
+        const confirmDelete = confirm('คุณแน่ใจหรือไม่ที่จะลบแชทนี้? การกระทำนี้ไม่สามารถย้อนกลับได้');
+        
+        if (!confirmDelete) return;
+
+        try {
+            // Delete from database
+            const success = await deleteFortuneFromDB(chatId);
+            
+            if (success) {
+                // Remove from local history
+                allHistories = allHistories.filter(chat => chat.id !== chatId);
+                displayHistoryList();
+                
+                // If currently viewing the deleted chat, reset to new chat
+                if (currentChatId === chatId) {
+                    resetApplication();
+                }
+                
+                alert('ลบแชทเรียบร้อยแล้ว');
+            } else {
+                alert('เกิดข้อผิดพลาดในการลบแชท กรุณาลองใหม่อีกครั้ง');
+            }
+        } catch (error) {
+            console.error('Error deleting chat:', error);
+            alert('เกิดข้อผิดพลาดในการลบแชท กรุณาลองใหม่อีกครั้ง');
+        }
+    }
+
+    // Handle clear all chats
+    async function handleClearAll() {
+        const confirmClear = confirm('คุณแน่ใจหรือไม่ที่จะลบประวัติการแชททั้งหมด?\nการกระทำนี้จะลบข้อมูลทั้งหมดและไม่สามารถย้อนกลับได้');
+        
+        if (!confirmClear) return;
+
+        try {
+            // Clear all from database
+            const success = await clearAllFortunesFromDB();
+            
+            if (success) {
+                // Clear local history
+                allHistories = [];
+                displayHistoryList();
+                
+                // Reset to new chat
+                resetApplication();
+                
+                alert('ลบประวัติการแชททั้งหมดเรียบร้อยแล้ว');
+            } else {
+                alert('เกิดข้อผิดพลาดในการลบประวัติ กรุณาลองใหม่อีกครั้ง');
+            }
+        } catch (error) {
+            console.error('Error clearing all chats:', error);
+            alert('เกิดข้อผิดพลาดในการลบประวัติ กรุณาลองใหม่อีกครั้ง');
+        }
     }
 
     function loadSpecificChat(chatId) {
@@ -336,8 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.topicSelect.value = chatToLoad.userInfo.topicValue;
             }
             
-            // Keep inputs editable - don't lock them
-            elements.submitSidebarBtn.textContent = 'อัปเดตข้อมูล';
+            const sidebarInputs = [elements.userNameInput, elements.userGenderSelect, elements.userDobInput, elements.topicSelect, elements.submitSidebarBtn];
+            sidebarInputs.forEach(el => el.disabled = true);
+            elements.submitSidebarBtn.textContent = 'ข้อมูลถูกล็อคแล้ว';
             
             currentChatId = chatId;
             isUserInfoSubmitted = true;
@@ -351,11 +488,14 @@ document.addEventListener('DOMContentLoaded', () => {
         isUserInfoSubmitted = false;
         currentChatId = null;
         
+        const sidebarInputs = [elements.userNameInput, elements.userGenderSelect, elements.userDobInput, elements.topicSelect, elements.submitSidebarBtn];
+        sidebarInputs.forEach(el => el.disabled = false);
+        
         elements.userNameInput.value = '';
         elements.userGenderSelect.value = '';
         elements.userDobInput.value = '';
         elements.topicSelect.value = 'overall';
-        elements.submitSidebarBtn.textContent = 'เริ่มแชท';
+        elements.submitSidebarBtn.textContent = 'ส่ง';
         elements.headerTitle.textContent = 'ดูดวง';
         
         setChatState(false);
@@ -376,58 +516,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleSidebarSubmit() {
+    function handleSidebarSubmit() {
         const isNameValid = elements.userNameInput.value.trim() !== '';
         const isGenderValid = elements.userGenderSelect.value !== '';
         const isDobValid = elements.userDobInput.value.trim() !== '';
         const isTopicValid = elements.topicSelect.value !== '';
         
         if (isNameValid && isGenderValid && isDobValid && isTopicValid) {
-            // If updating existing chat, update the user info
-            if (currentChatId && allHistories.find(h => h.id === currentChatId)) {
-                await updateUserInfo();
-            } else {
-                // New chat session
-                currentChatId = Date.now();
-            }
-            
             isUserInfoSubmitted = true;
+            currentChatId = Date.now();
             setChatState(true);
             elements.messageInput.focus();
             
             const selectedTopicText = elements.topicSelect.options[elements.topicSelect.selectedIndex].text;
             elements.headerTitle.textContent = selectedTopicText;
             
-            elements.submitSidebarBtn.textContent = 'อัปเดตข้อมูล';
+            const sidebarInputs = [elements.userNameInput, elements.userGenderSelect, elements.userDobInput, elements.topicSelect, elements.submitSidebarBtn];
+            sidebarInputs.forEach(el => el.disabled = true);
+            elements.submitSidebarBtn.textContent = 'ข้อมูลถูกล็อคแล้ว';
             
             saveCurrentChat();
         } else {
             alert('กรอกข้อมูลให้ครบก่อน');
-        }
-    }
-
-    async function updateUserInfo() {
-        const currentChat = allHistories.find(h => h.id === currentChatId);
-        if (currentChat) {
-            // Update local history
-            currentChat.userInfo = {
-                name: elements.userNameInput.value,
-                gender: elements.userGenderSelect.value,
-                dob: elements.userDobInput.value,
-                topicValue: elements.topicSelect.value
-            };
-            currentChat.topic = getTopicDisplayName(elements.topicSelect.value);
-            
-            // Update header
-            elements.headerTitle.textContent = currentChat.topic;
-            
-            // Refresh history display
-            displayHistoryList();
-            
-            console.log('✅ User info updated for current chat');
-            
-            // Show update confirmation
-            showNotification('ข้อมูลผู้ใช้อัปเดตแล้ว', 'success');
         }
     }
 
@@ -442,18 +552,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         elements.userDobInput.value = value;
-        
-        // Validate date format
-        if (value.length === 10) {
-            const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
-            if (dateRegex.test(value)) {
-                elements.userDobInput.style.borderColor = '#28a745';
-            } else {
-                elements.userDobInput.style.borderColor = '#dc3545';
-            }
-        } else {
-            elements.userDobInput.style.borderColor = '#ced4da';
-        }
     }
 
     // --- 4. Event Listeners ---
@@ -473,13 +571,6 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.userDobInput.addEventListener('input', formatDobInput);
     }
 
-    // Initialize application
-    async function initializeApp() {
-        await checkBackendConnection();
-        showConnectionStatus();
-        resetApplication();
-    }
-
     // --- 5. Initial Page Load ---
-    initializeApp();
+    resetApplication();
 });
