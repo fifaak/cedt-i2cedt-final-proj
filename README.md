@@ -33,32 +33,32 @@ npm run dev  # http://localhost:3000
 
 ```
 thai-fortune-app/
-├── backend/                      # Express.js API Server
+├── backend/                     # Express.js API Server
 │   ├── controllers/             # Route controllers
 │   ├── routes/                  # API routes
 │   ├── services/                # Business logic (MongoDB sync)
 │   ├── storage/                 # Local storage implementation
 │   │   ├── localStorage.js      # Local JSON file storage
-│   │   └── data/               # JSON data files
-│   ├── server.js               # Main server file
-│   ├── package.json            # Dependencies
-│   └── .env                    # Environment variables
+│   │   └── data/                # JSON data files
+│   ├── server.js                # Main server file
+│   ├── package.json             # Dependencies
+│   └── .env                     # Environment variables
 │
 ├── frontend/                    # Static Web Client
-│   ├── public/                 # Static assets
-│   │   ├── index.html          # Main HTML page
-│   │   ├── styles.css          # CSS styling
-│   │   └── scripts.js          # Vanilla JavaScript
-│   ├── server.js               # Express server for static files
-│   └── package.json            # Frontend dependencies
+│   ├── public/                  # Static assets
+│   │   ├── index.html           # Main HTML page
+│   │   ├── styles.css           # CSS styling
+│   │   └── scripts.js           # Vanilla JavaScript
+│   ├── server.js                # Express server for static files
+│   └── package.json             # Frontend dependencies
 │
-├── .vscode/                    # VS Code settings
-├── .gitignore                  # Git ignore rules
-├── package.json                # Root package.json for scripts
-├── setup.sh                   # Setup script
-├── start-servers.sh            # Start both servers
-├── test-connection.js          # Connection test script
-└── README.md                   # This documentation
+├── .vscode/                     # VS Code settings
+├── .gitignore                   # Git ignore rules
+├── package.json                 # Root package.json for scripts
+├── setup.sh                     # Setup script
+├── start-servers.sh             # Start both servers
+├── test-connection.js           # Connection test script
+└── README.md                    # This documentation
 ```
 
 ## Features
