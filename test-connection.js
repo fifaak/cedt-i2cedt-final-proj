@@ -107,7 +107,7 @@ async function runTests() {
         console.log('🔮 Testing Backend (port 3001)...');
         const backendResult = await testBackend();
         console.log('✅ Backend OK:', backendResult.status);
-        console.log('   MongoDB:', backendResult.mongodb.status);
+        console.log('   Storage:', backendResult.storage.type, '-', backendResult.storage.status);
         console.log('   Node:', backendResult.nodeVersion);
     } catch (error) {
         console.log('❌ Backend Error:', error.message);

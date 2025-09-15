@@ -1,20 +1,22 @@
-const Chat = require('../models/chat');
+const localStorage = require('../storage/localStorage');
 
 // Create a new chat session
 exports.createChat = async (req, res) => {
   try {
     const { userId, message } = req.body;
     
-    const newChat = new Chat({
+    const newChat = await localStorage.createChat({
       userId,
       messages: [{
         content: message,
-        role: 'user'
+        role: 'user',
+        timestamp: new Date().toISOString(),
+        edited: false,
+        editHistory: []
       }]
     });
 
-    const savedChat = await newChat.save();
-    res.status(201).json(savedChat);
+    res.status(201).json(newChat);
   } catch (error) {
     res.status(500).json({ error: 'Error creating chat session' });
   }
@@ -24,7 +26,7 @@ exports.createChat = async (req, res) => {
 exports.getUserChats = async (req, res) => {
   try {
     const { userId } = req.params;
-    const chats = await Chat.find({ userId }).sort({ updatedAt: -1 });
+    const chats = await localStorage.getChatsByUserId(userId);
     res.json(chats);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching chats' });
@@ -34,7 +36,7 @@ exports.getUserChats = async (req, res) => {
 // Get a specific chat by ID
 exports.getChatById = async (req, res) => {
   try {
-    const chat = await Chat.findById(req.params.chatId);
+    const chat = await localStorage.getChatById(req.params.chatId);
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
@@ -48,7 +50,7 @@ exports.getChatById = async (req, res) => {
 exports.addMessage = async (req, res) => {
   try {
     const { content, role } = req.body;
-    const chat = await Chat.findById(req.params.chatId);
+    const chat = await localStorage.getChatById(req.params.chatId);
     
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
@@ -57,10 +59,12 @@ exports.addMessage = async (req, res) => {
     chat.messages.push({
       content,
       role,
-      timestamp: new Date()
+      timestamp: new Date().toISOString(),
+      edited: false,
+      editHistory: []
     });
 
-    const updatedChat = await chat.save();
+    const updatedChat = await localStorage.updateChat(req.params.chatId, chat);
     res.json(updatedChat);
   } catch (error) {
     res.status(500).json({ error: 'Error adding message' });
@@ -73,7 +77,7 @@ exports.editMessage = async (req, res) => {
     const { chatId, messageIndex } = req.params;
     const { content } = req.body;
     
-    const chat = await Chat.findById(chatId);
+    const chat = await localStorage.getChatById(chatId);
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
@@ -90,15 +94,15 @@ exports.editMessage = async (req, res) => {
     
     currentMessage.editHistory.push({
       content: currentMessage.content,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     });
 
     // Update the message
     currentMessage.content = content;
     currentMessage.edited = true;
-    currentMessage.timestamp = new Date();
+    currentMessage.timestamp = new Date().toISOString();
 
-    const updatedChat = await chat.save();
+    const updatedChat = await localStorage.updateChat(chatId, chat);
     res.json(updatedChat);
   } catch (error) {
     res.status(500).json({ error: 'Error editing message' });
@@ -108,7 +112,7 @@ exports.editMessage = async (req, res) => {
 // Delete a chat
 exports.deleteChat = async (req, res) => {
   try {
-    const chat = await Chat.findByIdAndDelete(req.params.chatId);
+    const chat = await localStorage.deleteChat(req.params.chatId);
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
@@ -123,7 +127,7 @@ exports.deleteMessage = async (req, res) => {
   try {
     const { chatId, messageIndex } = req.params;
     
-    const chat = await Chat.findById(chatId);
+    const chat = await localStorage.getChatById(chatId);
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
@@ -133,7 +137,7 @@ exports.deleteMessage = async (req, res) => {
     }
 
     chat.messages.splice(messageIndex, 1);
-    const updatedChat = await chat.save();
+    const updatedChat = await localStorage.updateChat(chatId, chat);
     res.json(updatedChat);
   } catch (error) {
     res.status(500).json({ error: 'Error deleting message' });

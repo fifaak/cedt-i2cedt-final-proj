@@ -34,47 +34,65 @@ npm run dev  # http://localhost:3000
 ```
 thai-fortune-app/
 ├── backend/                      # Express.js API Server
-│   ├── server.js                # Main server file with HTTPS requests
-│   ├── package.json             # Dependencies (cors, dotenv, express, mongoose)
-│   ├── package-lock.json        # Lock file
-│   ├── .env                     # Environment variables
-│   ├── README.md                # Backend documentation
-│   └── node_modules/            # Dependencies
+│   ├── controllers/             # Route controllers
+│   ├── routes/                  # API routes
+│   ├── services/                # Business logic (MongoDB sync)
+│   ├── storage/                 # Local storage implementation
+│   │   ├── localStorage.js      # Local JSON file storage
+│   │   └── data/               # JSON data files
+│   ├── server.js               # Main server file
+│   ├── package.json            # Dependencies
+│   └── .env                    # Environment variables
 │
-├── frontend/                     # Static Web Client
-│   ├── app.js                   # Express server for static files
-│   ├── index.html               # Main HTML page
-│   ├── package.json             # Frontend dependencies (express only)
-│   ├── package-lock.json        # Lock file
-│   ├── README.md                # Frontend documentation
-│   ├── node_modules/            # Dependencies
-│   └── public/                  # Static assets
-│       ├── styles.css           # CSS styling
-│       └── scripts.js           # Vanilla JavaScript
+├── frontend/                    # Static Web Client
+│   ├── public/                 # Static assets
+│   │   ├── index.html          # Main HTML page
+│   │   ├── styles.css          # CSS styling
+│   │   └── scripts.js          # Vanilla JavaScript
+│   ├── server.js               # Express server for static files
+│   └── package.json            # Frontend dependencies
 │
-├── .vscode/                     # VS Code settings
-├── .gitignore                   # Git ignore rules
-├── README.md                    # This documentation
-└── final-proj3k.zip            # Project archive
+├── .vscode/                    # VS Code settings
+├── .gitignore                  # Git ignore rules
+├── package.json                # Root package.json for scripts
+├── setup.sh                   # Setup script
+├── start-servers.sh            # Start both servers
+├── test-connection.js          # Connection test script
+└── README.md                   # This documentation
 ```
 
 ## Features
 
+### 🔮 **Core Features**
 - **AI Fortune Teller**: Chat with "อาจารย์คม" using Typhoon AI
 - **User Profiles**: Name, birthdate, gender, topic selection
-- **Chat History**: MongoDB storage with pagination
+- **Chat History**: Hybrid storage (local files + MongoDB sync) with pagination
 - **Input Validation**: Comprehensive data validation
 - **Error Handling**: Graceful error recovery
-- **Health Monitoring**: API health check endpoint
-- **Thai Language**: Full Thai interface and responses
+
+### 🎨 **UI/UX Features**
+- **Typing Animation**: Realistic typing effect for AI responses with variable speed
+- **Typing Indicator**: Animated "อาจารย์คมกำลังเพ่งดวง..." while waiting for response
+- **Improved Text Input**: Taller textarea (3 rows) with auto-resize
+- **Better Message Actions**: Edit/resend buttons with icons, positioned below messages
+- **Smooth Animations**: Fade-in effects and pulse animations for better UX
 - **Responsive Design**: Desktop and mobile support
+- **Thai Language**: Full Thai interface and responses
+- **Dark Theme**: Modern dark theme with gold accents
+
+### 🔧 **Technical Features**
+- **Hybrid Storage**: Local-first with MongoDB sync
+- **Auto-Sync**: Background sync every 10 seconds
+- **Health Monitoring**: API health check and sync status endpoints
+- **Offline-First**: Works perfectly without database connection
+- **Real-time Updates**: Live sync status and connection monitoring
 
 ## Prerequisites
 
 - **Node.js 18.0.0 or higher** (required)
 - **npm 8.0.0 or higher** (required)
-- MongoDB (local or cloud)
-- Typhoon API key
+- Typhoon API key (for AI predictions)
+- MongoDB (optional - app works without it, syncs when available)
 
 ## Installation
 
@@ -114,8 +132,8 @@ Create `.env` file in backend directory:
 
 ```env
 PORT=3001
-MONGODB_URI=mongodb://localhost:27017/fortune_telling
 TYPHOON_API_KEY=your_api_key_here
+MONGODB_URI=mongodb://localhost:27017/fortune_telling  # Optional
 ```
 
 #### 4. Launch Application
@@ -134,15 +152,58 @@ npm start
 # Visit: http://localhost:3000
 ```
 
+## Hybrid Storage System
+
+The app uses a **hybrid storage approach** that provides the best of both worlds:
+
+### 🔄 **How it Works**
+- **Primary Storage**: Local JSON files (always available)
+- **Secondary Storage**: MongoDB (syncs when available)
+- **Auto-Sync**: Checks MongoDB every 10 seconds and syncs local data
+- **Offline-First**: App works perfectly without MongoDB
+
+### 📁 **Data Flow**
+1. All data is **immediately saved locally** (instant response)
+2. Background service **checks MongoDB availability** every 10 seconds
+3. When MongoDB is available, **local data syncs automatically**
+4. **No data loss** - local files persist even if MongoDB is down
+
+### 🎯 **Benefits**
+- ✅ **Always works** - no database dependency
+- ✅ **No data loss** - local persistence guaranteed  
+- ✅ **Auto-sync** - seamless MongoDB integration when available
+- ✅ **Performance** - instant local responses
+- ✅ **Scalability** - MongoDB for production, local for development
+
 ## API Endpoints
 
-| Method | Endpoint           | Description            |
-| ------ | ------------------ | ---------------------- |
-| POST   | `/api/chat`        | Chat with AI           |
-| POST   | `/api/fortune`     | Create fortune reading |
-| GET    | `/api/fortune`     | Get all fortunes       |
-| GET    | `/api/fortune/:id` | Get specific fortune   |
-| GET    | `/health`          | Health check           |
+### Fortune Telling
+| Method | Endpoint           | Description                    | Request Body |
+| ------ | ------------------ | ------------------------------ | ------------ |
+| POST   | `/api/fortune`     | Create fortune reading         | `{name, birthdate, sex, topic, text}` |
+| GET    | `/api/fortune`     | Get all fortunes (paginated)   | Query: `?limit=50&page=1` |
+| GET    | `/api/fortune/:id` | Get specific fortune           | - |
+| PUT    | `/api/fortune/:id` | Update fortune                 | `{name, birthdate, sex, topic, text}` |
+| DELETE | `/api/fortune/:id` | Delete fortune                 | - |
+
+### Chat
+| Method | Endpoint           | Description                    | Request Body |
+| ------ | ------------------ | ------------------------------ | ------------ |
+| POST   | `/api/chat`        | Chat with AI (no storage)     | `{message, userInfo}` |
+| POST   | `/api/chat/`       | Create new chat session       | `{userId, message}` |
+| GET    | `/api/chat/user/:userId` | Get user's chat history  | - |
+| GET    | `/api/chat/:chatId` | Get specific chat             | - |
+| POST   | `/api/chat/:chatId/messages` | Add message to chat | `{content, role}` |
+| PUT    | `/api/chat/:chatId/messages/:index` | Edit message | `{content}` |
+| DELETE | `/api/chat/:chatId` | Delete chat                   | - |
+| DELETE | `/api/chat/:chatId/messages/:index` | Delete message | - |
+
+### System
+| Method | Endpoint           | Description                    | Response |
+| ------ | ------------------ | ------------------------------ | -------- |
+| GET    | `/api/health`      | System health check            | `{status, storage, sync, nodeVersion}` |
+| POST   | `/api/sync`        | Manual MongoDB sync            | `{success, message, details}` |
+| GET    | `/api/sync/status` | Check sync status              | `{isConnected, syncActive, mongoState}` |
 
 ## Tech Stack
 
@@ -150,7 +211,7 @@ npm start
 
 - Node.js
 - Express.js
-- MongoDB with Mongoose
+- Hybrid storage (Local JSON files + MongoDB sync)
 - Typhoon AI API
 - Native HTTPS module (no external HTTP clients)
 
@@ -167,7 +228,7 @@ npm start
 - `cors` - Cross-origin resource sharing
 - `dotenv` - Environment variable management
 - `express` - Web application framework
-- `mongoose` - MongoDB object modeling
+- `mongoose` - MongoDB object modeling (for sync)
 
 ### Frontend Dependencies
 

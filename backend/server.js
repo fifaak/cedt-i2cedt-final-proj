@@ -1,7 +1,8 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 const https = require("https");
+const localStorage = require("./storage/localStorage");
+const { MongoSync } = require("./services/mongoSync");
 require("dotenv").config();
 
 const app = express();
@@ -17,27 +18,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request timeout middleware
 app.use((req, res, next) => {
-  res.setTimeout(30000, () => {
-    res.status(408).json({ error: "Request timeout" });
-  });
+  res.setTimeout(30000, () => res.status(408).json({ error: "Request timeout" }));
   next();
 });
 
-// MongoDB connection check middleware
 // Mount routes
 const chatRoutes = require('./routes/chat');
 app.use('/api/chat', chatRoutes);
-
-// MongoDB connection check middleware
-app.use('/api', (req, res, next) => {
-  if (mongoose.connection.readyState !== 1 && req.path !== '/health') {
-    return res.status(503).json({ 
-      error: "ฐานข้อมูลไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง",
-      details: "Database connection not available"
-    });
-  }
-  next();
-});
 
 // Helper function for HTTPS requests (Node 18+ compatible)
 function makeHttpsRequest(url, options) {
@@ -94,73 +81,10 @@ function makeHttpsRequest(url, options) {
   });
 }
 
-// MongoDB Schema
-const fortuneSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-  },
-  birthdate: {
-    type: String,
-    required: true,
-    match: /^\d{2}\/\d{2}\/\d{4}$/, // DD/MM/YYYY format
-  },
-  sex: {
-    type: String,
-    required: true,
-    enum: ["male", "female", "other"],
-  },
-  topic: {
-    type: String,
-    required: true,
-    enum: ["overall", "career", "finance", "love", "health"],
-  },
-  text: {
-    type: String,
-    required: true,
-  },
-  prediction: {
-    type: String,
-    required: true,
-  },
-  created_at: {
-    type: Date,
-    default: Date.now,
-  },
-});
-
-const Fortune = mongoose.model("Fortune", fortuneSchema);
-
-// Connect to MongoDB with better error handling
-const connectDB = async () => {
-  try {
-    const mongoURI = process.env.MONGODB_URI || "mongodb://localhost:27017/fortune_telling";
-    console.log("🔄 Attempting to connect to MongoDB...");
-    
-    await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-    });
-    
-    console.log("✅ Connected to MongoDB successfully");
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
-    console.log("💡 Suggestions:");
-    console.log("   1. Check if MongoDB is running (local) or cluster is active (Atlas)");
-    console.log("   2. Verify your connection string in .env file");
-    console.log("   3. Check network connectivity");
-    console.log("   4. Ensure IP is whitelisted in MongoDB Atlas");
-    
-    // Don't exit in development, allow server to run without DB
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    } else {
-      console.log("🔄 Server will continue running without database connection");
-    }
-  }
-};
-
-connectDB();
+// Initialize services
+console.log("🔄 Initializing storage and sync services...");
+const mongoSync = new MongoSync();
+mongoSync.startPeriodicSync(10000); // Sync every 10 seconds
 
 async function getAiPrediction(userInfo, userMessage) {
   const API_KEY = process.env.TYPHOON_API_KEY;
@@ -257,8 +181,8 @@ app.post("/api/fortune", validateFortuneInput, async (req, res) => {
     const userInfo = { name, birthdate, sex, topic };
     const prediction = await getAiPrediction(userInfo, text);
 
-    // Save to database
-    const fortune = new Fortune({
+    // Save to local storage
+    const savedFortune = await localStorage.createFortune({
       name: name.trim(),
       birthdate,
       sex,
@@ -267,11 +191,10 @@ app.post("/api/fortune", validateFortuneInput, async (req, res) => {
       prediction,
     });
 
-    const savedFortune = await fortune.save();
     console.log(`✅ New fortune created for ${name}`);
 
     res.status(201).json({
-      id: savedFortune._id,
+      id: savedFortune.id,
       prediction: savedFortune.prediction,
     });
   } catch (error) {
@@ -284,19 +207,12 @@ app.get("/api/fortune", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50; // Default limit
     const page = parseInt(req.query.page) || 1;
-    const skip = (page - 1) * limit;
 
-    const fortunes = await Fortune.find()
-      .sort({ created_at: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean(); // Use lean() for better performance
-
-    const total = await Fortune.countDocuments();
+    const result = await localStorage.getFortunes({ limit, page });
 
     res.json({
-      fortunes: fortunes.map((fortune) => ({
-        id: fortune._id,
+      fortunes: result.fortunes.map((fortune) => ({
+        id: fortune.id,
         name: fortune.name,
         birthdate: fortune.birthdate,
         sex: fortune.sex,
@@ -304,12 +220,7 @@ app.get("/api/fortune", async (req, res) => {
         prediction: fortune.prediction,
         created_at: fortune.created_at,
       })),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("❌ Error fetching fortunes:", error);
@@ -319,19 +230,14 @@ app.get("/api/fortune", async (req, res) => {
 
 app.get("/api/fortune/:id", async (req, res) => {
   try {
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "รูปแบบ ID ไม่ถูกต้อง" });
-    }
-
-    const fortune = await Fortune.findById(req.params.id).lean();
+    const fortune = await localStorage.getFortuneById(req.params.id);
 
     if (!fortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
     }
 
     res.json({
-      id: fortune._id,
+      id: fortune.id,
       name: fortune.name,
       birthdate: fortune.birthdate,
       sex: fortune.sex,
@@ -347,11 +253,6 @@ app.get("/api/fortune/:id", async (req, res) => {
 
 app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
   try {
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "รูปแบบ ID ไม่ถูกต้อง" });
-    }
-
     const { name, birthdate, sex, topic, text } = req.body;
 
     // Get new prediction with updated info
@@ -361,18 +262,14 @@ app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
       text || "อัปเดตข้อมูลการดูดวง"
     );
 
-    const updatedFortune = await Fortune.findByIdAndUpdate(
-      req.params.id,
-      {
-        name: name.trim(),
-        birthdate,
-        sex,
-        topic,
-        text: text.trim(),
-        prediction,
-      },
-      { new: true, runValidators: true }
-    );
+    const updatedFortune = await localStorage.updateFortune(req.params.id, {
+      name: name.trim(),
+      birthdate,
+      sex,
+      topic,
+      text: text.trim(),
+      prediction,
+    });
 
     if (!updatedFortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
@@ -381,7 +278,7 @@ app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
     console.log(`✅ Fortune updated for ${name}`);
 
     res.json({
-      id: updatedFortune._id,
+      id: updatedFortune.id,
       name: updatedFortune.name,
       birthdate: updatedFortune.birthdate,
       sex: updatedFortune.sex,
@@ -396,12 +293,7 @@ app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
 
 app.delete("/api/fortune/:id", async (req, res) => {
   try {
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "รูปแบบ ID ไม่ถูกต้อง" });
-    }
-
-    const deletedFortune = await Fortune.findByIdAndDelete(req.params.id);
+    const deletedFortune = await localStorage.deleteFortune(req.params.id);
 
     if (!deletedFortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
@@ -434,21 +326,51 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// Manual sync endpoint
+app.post("/api/sync", async (req, res) => {
+  try {
+    const result = await mongoSync.manualSync();
+    res.json({
+      success: result.success,
+      message: result.success ? "Sync completed successfully" : "Sync failed",
+      details: result.results || result.reason,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error in manual sync:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "เกิดข้อผิดพลาดในการซิงค์ข้อมูล",
+      details: error.message 
+    });
+  }
+});
+
+// Sync status endpoint
+app.get("/api/sync/status", (req, res) => {
+  const status = mongoSync.getSyncStatus();
+  res.json({
+    ...status,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health check endpoint
 app.get("/api/health", (req, res) => {
-  const mongoStatus = {
-    0: "disconnected",
-    1: "connected", 
-    2: "connecting",
-    3: "disconnecting"
-  };
+  const syncStatus = mongoSync.getSyncStatus();
   
   res.json({
-    status: mongoose.connection.readyState === 1 ? "OK" : "DEGRADED",
+    status: "OK",
     timestamp: new Date().toISOString(),
-    mongodb: {
-      status: mongoStatus[mongoose.connection.readyState] || "unknown",
-      readyState: mongoose.connection.readyState
+    storage: {
+      type: "hybrid",
+      local: "connected",
+      mongodb: syncStatus.isConnected ? "connected" : "disconnected"
+    },
+    sync: {
+      active: syncStatus.syncActive,
+      mongoState: syncStatus.mongoState,
+      connectionAttempts: syncStatus.connectionAttempts
     },
     nodeVersion: process.version,
     environment: process.env.NODE_ENV || "development"
@@ -469,26 +391,16 @@ app.use("*", (req, res) => {
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   console.log("🛑 SIGTERM received, shutting down gracefully");
-  try {
-    await mongoose.connection.close();
-    console.log("📦 MongoDB connection closed");
-    process.exit(0);
-  } catch (error) {
-    console.error("❌ Error closing MongoDB connection:", error);
-    process.exit(1);
-  }
+  mongoSync.stopPeriodicSync();
+  console.log("📦 Local storage data saved");
+  process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("🛑 SIGINT received, shutting down gracefully");
-  try {
-    await mongoose.connection.close();
-    console.log("📦 MongoDB connection closed");
-    process.exit(0);
-  } catch (error) {
-    console.error("❌ Error closing MongoDB connection:", error);
-    process.exit(1);
-  }
+  mongoSync.stopPeriodicSync();
+  console.log("📦 Local storage data saved");
+  process.exit(0);
 });
 
 // Start server

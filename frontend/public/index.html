@@ -40,7 +40,7 @@
                     </select>
                 </div>
             </form>
-            <button type="button" id="submit-sidebar-btn">ส่ง</button>
+            <button type="button" id="submit-sidebar-btn">บันทึก</button>
         </div>
 
         <div id="history-section">
@@ -53,14 +53,20 @@
         <button type="button" id="new-chat-btn">แชทใหม่</button>
     </aside>
 
+    <div class="overlay" aria-hidden="true"></div>
+
     <header>
-        <button id="menu-toggle" aria-label="Toggle Menu">☰</button>
+        <button id="menu-toggle" class="hamburger" aria-label="Toggle Menu" aria-controls="sidebar" aria-expanded="false">
+            <span class="hamburger-box">
+                <span class="hamburger-inner"></span>
+            </span>
+        </button>
         <h1>ดูดวง</h1>
     </header>
     <main id="chat-container"></main>
     <footer id="input-area">
         <form id="chat-form">
-            <textarea id="message-input" placeholder="พิมพ์ข้อความ..." rows="1"></textarea>
+            <textarea id="message-input" placeholder="พิมพ์ข้อความ..." rows="3"></textarea>
             <button type="submit" id="send-btn">ส่ง</button>
         </form>
     </footer>
