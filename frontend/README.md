@@ -5,9 +5,34 @@ Static web client for Thai Fortune Telling app with modern UI.
 ## Setup
 
 ```bash
+cd frontend
 npm install
-npm start
+npm start  # http://localhost:3000
 ```
+
+Or for auto-restart during development:
+
+```bash
+npm run dev  # nodemon server.js
+```
+
+## Environment
+
+Copy `env.example` to `.env` and adjust if needed:
+
+```
+PORT=3000
+BACKEND_HOST=localhost
+BACKEND_PORT=3001
+# Optional override used by browser client (otherwise auto-detected)
+# API_BASE=http://localhost:3001/api
+```
+
+## Development
+
+- The frontend runs on port 3000 and proxies `/api` to the backend on port 3001 using Node's built-in `http` module (no extra proxy deps).
+- Static assets are served from `public/` and ES modules from `src/`.
+- API shapes are documented in `DATA_SCHEMA.md`.
 
 ## Features
 
@@ -22,7 +47,7 @@ npm start
 
 ### Technical
 - **Vanilla JavaScript** - No frameworks
-- **Express server** for static files and API proxy
+- **Express server** for static files and built-in proxy
 - **MongoDB-backed only**: local/offline storage removed
 - **Mobile responsive** design
 
@@ -32,7 +57,6 @@ npm start
 public/
 ├── index.html         # Main HTML template (loads /src/main.js)
 ├── styles.css         # CSS styling with dark theme
-└── styles/            # Extra responsive styles (optional)
 
 src/
 ├── main.js            # App entry (ES modules)
@@ -44,10 +68,3 @@ src/
 ├── storage.js         # Form helpers (getUserInfoFromForm)
 └── history.js         # Chat history mapping/listing, session grouping
 ```
-
-## Development
-
-The frontend runs on port 3000 and proxies API calls to the backend on port 3001.
-
-- Configure via `env.example` (copy to `.env`): `PORT`, `BACKEND_HOST`, `BACKEND_PORT`.
-- API shapes are documented in `DATA_SCHEMA.md`.
