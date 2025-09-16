@@ -34,7 +34,18 @@ export const createMessage = async (req, res) => {
 		}
 
 		const systemPrompt = buildSystemPrompt(userInfo);
-		const { content } = await getTyphoonCompletion(systemPrompt, message);
+
+		// Pull prior messages for this user (only user messages) to build context
+		const history = await ChatMessage.find({
+			'userInfo.name': userInfo.name,
+			'userInfo.birthdate': userInfo.birthdate,
+		})
+			.sort({ createdAt: 1 })
+			.select('userMessage');
+		const priorUserMessages = history.map((h) => ({ role: 'user', content: h.userMessage }));
+		const messages = [...priorUserMessages, { role: 'user', content: message }];
+
+		const { content } = await getTyphoonCompletion(systemPrompt, messages);
 
 		const saved = await ChatMessage.create({
 			userInfo,
@@ -74,7 +85,19 @@ export const editMessage = async (req, res) => {
 		if (!existing) return res.status(404).json({ error: 'Message not found' });
 
 		const systemPrompt = buildSystemPrompt(existing.userInfo);
-		const { content } = await getTyphoonCompletion(systemPrompt, newMessage);
+
+		// Build context from all prior messages EXCEPT the one being edited
+		const history = await ChatMessage.find({
+			'userInfo.name': existing.userInfo.name,
+			'userInfo.birthdate': existing.userInfo.birthdate,
+			_id: { $ne: existing._id },
+		})
+			.sort({ createdAt: 1 })
+			.select('userMessage');
+		const priorUserMessages = history.map((h) => ({ role: 'user', content: h.userMessage }));
+		const messages = [...priorUserMessages, { role: 'user', content: newMessage }];
+
+		const { content } = await getTyphoonCompletion(systemPrompt, messages);
 
 		existing.userMessage = newMessage;
 		existing.systemPrompt = systemPrompt;

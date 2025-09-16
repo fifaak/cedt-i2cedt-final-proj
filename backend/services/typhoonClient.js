@@ -5,7 +5,7 @@ dotenv.config();
 const TYPHOON_API_URL = 'https://api.opentyphoon.ai/v1/chat/completions';
 const TYPHOON_MODEL = process.env.TYPHOON_MODEL || 'typhoon-v2.1-12b-instruct';
 
-export async function getTyphoonCompletion(systemPrompt, userMessage, options = {}) {
+export async function getTyphoonCompletion(systemPrompt, userMessageOrMessages, options = {}) {
 	const {
 		max_tokens = 512,
 		temperature = 0.6,
@@ -19,11 +19,15 @@ export async function getTyphoonCompletion(systemPrompt, userMessage, options = 
 		throw new Error('Missing TYPHOON_API_KEY in environment');
 	}
 
+	const userMessagesArray = Array.isArray(userMessageOrMessages)
+		? userMessageOrMessages
+		: [{ role: 'user', content: userMessageOrMessages }];
+
 	const payload = {
 		model: TYPHOON_MODEL,
 		messages: [
 			{ role: 'system', content: systemPrompt },
-			{ role: 'user', content: userMessage },
+			...userMessagesArray,
 		],
 		max_tokens,
 		temperature,
