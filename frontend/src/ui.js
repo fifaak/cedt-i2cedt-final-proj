@@ -2,6 +2,12 @@ import { elements } from "./dom.js";
 import { TYPING_MESSAGES, PLACEHOLDERS } from "./constants.js";
 import { appState } from "./state.js";
 
+function isUserNearBottom(container, thresholdPx = 80) {
+  if (!container) return true;
+  const distanceFromBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+  return distanceFromBottom <= thresholdPx;
+}
+
 export function setChatState(enabled) {
   elements.messageInput.disabled = !enabled;
   elements.sendBtn.disabled = !enabled;
@@ -21,7 +27,10 @@ export function displayMessage(text, type, shouldSave = true, saveFn = null) {
   p.textContent = text;
   messageDiv.appendChild(p);
   elements.chatContainer.appendChild(messageDiv);
-  elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+  // Only autoscroll if the user is near the bottom already
+  if (isUserNearBottom(elements.chatContainer)) {
+    elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+  }
   if (shouldSave && saveFn) saveFn();
   return messageDiv;
 }
@@ -46,7 +55,7 @@ export function removeTypingIndicator() {
   if (typingIndicator) typingIndicator.remove();
 }
 
-export function typeWriterEffect(element, text, baseSpeed = 30) {
+export function typeWriterEffect(element, text, baseSpeed = 30, autoScroll = true) {
   return new Promise((resolve) => {
     element.textContent = "";
     let i = 0;
@@ -61,7 +70,9 @@ export function typeWriterEffect(element, text, baseSpeed = 30) {
         else if (char === ",") speed = baseSpeed * 1.5;
         else if (Math.random() < 0.1) speed = baseSpeed * 2;
         setTimeout(typeChar, speed);
-        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+        if (autoScroll) {
+          elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+        }
       } else {
         resolve();
       }
@@ -74,13 +85,16 @@ export async function displayMessageWithTyping(text, type, shouldSave = true, sa
   if (type === "received") {
     removeTypingIndicator();
     await new Promise((resolve) => setTimeout(resolve, 500));
+    const shouldAutoScroll = isUserNearBottom(elements.chatContainer);
     const messageDiv = document.createElement("div");
     messageDiv.classList.add("message", type);
     const p = document.createElement("p");
     messageDiv.appendChild(p);
     elements.chatContainer.appendChild(messageDiv);
-    elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
-    await typeWriterEffect(p, text, 25);
+    if (shouldAutoScroll) {
+      elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+    }
+    await typeWriterEffect(p, text, 25, shouldAutoScroll);
     if (shouldSave && saveFn) saveFn();
     return messageDiv;
   }

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Fortune from '../models/Fortune.js';
 import { validateFortuneInput } from '../utils/validators.js';
 import { getTyphoonCompletion } from '../services/typhoonClient.js';
@@ -66,21 +67,37 @@ export const updateFortune = async (req, res) => {
 		}
 		const { name, birthdate, sex, topic, text } = req.body;
 
-		const existing = await Fortune.findById(id);
-		if (!existing) return res.status(404).json({ error: 'NotFound' });
+		let targetDoc = null;
+		if (mongoose.isValidObjectId(id)) {
+			targetDoc = await Fortune.findById(id);
+		} else {
+			// Composite session key support: name|birthdate|sex|topic
+			const parts = String(id).split('|');
+			if (parts.length !== 4) {
+				return res.status(400).json({ error: 'BadRequest', details: 'Invalid id format' });
+			}
+			const [kName, kBirthdate, kSex, kTopic] = parts.map((s) => (s || '').trim());
+			if (!kName || !kBirthdate || !kSex || !kTopic) {
+				return res.status(400).json({ error: 'BadRequest', details: 'Invalid session key parts' });
+			}
+			// Use latest fortune in this session as the update target
+			targetDoc = await Fortune.findOne({ name: kName, birthdate: kBirthdate, sex: kSex, topic: kTopic }).sort({ createdAt: -1 });
+		}
+
+		if (!targetDoc) return res.status(404).json({ error: 'NotFound' });
 
 		const systemPrompt = buildSystemPrompt({ name, birthdate, sex, topic });
 		const { content } = await getTyphoonCompletion(systemPrompt, text);
 
-		existing.name = name;
-		existing.birthdate = birthdate;
-		existing.sex = sex;
-		existing.topic = topic;
-		existing.text = text;
-		existing.prediction = content;
-		await existing.save();
+		targetDoc.name = name;
+		targetDoc.birthdate = birthdate;
+		targetDoc.sex = sex;
+		targetDoc.topic = topic;
+		targetDoc.text = text;
+		targetDoc.prediction = content;
+		await targetDoc.save();
 
-		return res.status(200).json({ prediction: existing.prediction });
+		return res.status(200).json({ prediction: targetDoc.prediction });
 	} catch (err) {
 		return res.status(500).json({ error: 'ServerError', details: err.message });
 	}
@@ -89,10 +106,27 @@ export const updateFortune = async (req, res) => {
 export const deleteFortune = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const existing = await Fortune.findById(id);
-		if (!existing) return res.status(404).json({ error: 'NotFound' });
-		await existing.deleteOne();
-		return res.status(200).json({ ok: true });
+
+		// If it's a valid ObjectId, delete by _id
+		if (mongoose.isValidObjectId(id)) {
+			const existing = await Fortune.findById(id);
+			if (!existing) return res.status(404).json({ error: 'NotFound' });
+			await existing.deleteOne();
+			return res.status(200).json({ ok: true, deletedCount: 1 });
+		}
+
+		// Otherwise, support composite session key: name|birthdate|sex|topic
+		// e.g., "hi|20/02/2000|male|overall"
+		const parts = String(id).split('|');
+		if (parts.length !== 4) {
+			return res.status(400).json({ error: 'BadRequest', details: 'Invalid id format' });
+		}
+		const [name, birthdate, sex, topic] = parts.map((s) => (s || '').trim());
+		if (!name || !birthdate || !sex || !topic) {
+			return res.status(400).json({ error: 'BadRequest', details: 'Invalid session key parts' });
+		}
+		const result = await Fortune.deleteMany({ name, birthdate, sex, topic });
+		return res.status(200).json({ ok: true, deletedCount: result.deletedCount || 0 });
 	} catch (err) {
 		return res.status(500).json({ error: 'ServerError', details: err.message });
 	}
