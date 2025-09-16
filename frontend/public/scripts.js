@@ -162,12 +162,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
-  async function getAiReplyViaChat(userMessage, userInfo) {
+  async function createChatOnServer(firstMessage, userInfo) {
     const response = await fetch(`${API_BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: userMessage,
+        userId: getDeterministicUserId(userInfo),
+        message: firstMessage,
+        userInfo: {
+          name: userInfo.name,
+          birthdate: userInfo.dob,
+          sex: userInfo.gender,
+          topic: userInfo.topicValue,
+        },
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function appendMessageToChat(chatId, content, userInfo) {
+    const response = await fetch(`${API_BASE}/chat/${chatId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content,
+        role: "user",
         userInfo: {
           name: userInfo.name,
           birthdate: userInfo.dob,
@@ -210,6 +230,16 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error deleting from DB:", error);
       return false;
     }
+  }
+
+  function getDeterministicUserId(userInfo) {
+    // Simple deterministic id based on user info fields
+    const raw = `${userInfo.name}|${userInfo.gender}|${userInfo.dob}|${userInfo.topicValue}`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+    }
+    return `u-${hash.toString(16)}`;
   }
 
   async function loadFortuneHistory() {
@@ -258,17 +288,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load saved chat history from localStorage first
     loadChatHistoryFromLocal();
 
-    // Merge server data with local data, avoiding duplicates
-    const existingIds = new Set(allHistories.map((h) => h.id));
-    const newServerFortunes = serverFortunes.filter(
-      (sf) => !existingIds.has(sf.id)
+    // Reconcile: replace server-sourced items with current server list (handles deletes),
+    // keep local pending items, and avoid duplicates
+    const localOnly = allHistories.filter((h) => h.source === "local");
+    const localOnlyFiltered = localOnly.filter(
+      (l) => !serverFortunes.some((sf) => sf.id === l.id) && !pending.some((p) => p.id === l.id)
     );
-    const newPendingFortunes = pending.filter((pf) => !existingIds.has(pf.id));
 
     allHistories = [
-      ...allHistories,
-      ...newPendingFortunes,
-      ...newServerFortunes,
+      ...serverFortunes,
+      ...pending,
+      ...localOnlyFiltered,
     ].sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
 
     displayHistoryList();
@@ -303,42 +333,26 @@ document.addEventListener("DOMContentLoaded", () => {
     // Show typing indicator
     showTypingIndicator();
 
-    // Try online save; if fails then fallback to /chat and local pending
+    // Cloud chat flow: create or append
     let aiPrediction = "";
-    let serverId = null;
     try {
-      const data = await getAiReplyOnline(userMessage, userInfo);
-      serverId = data.id || null;
-      aiPrediction = data.prediction || "";
-    } catch (err) {
-      // Fallback via chat endpoint (doesn't require DB)
-      try {
-        const data = await getAiReplyViaChat(userMessage, userInfo);
-        aiPrediction = data.prediction || "";
-      } catch (e2) {
-        aiPrediction = `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_BASE}). ลองใหม่ภายหลัง`;
+      if (!currentChatId) {
+        const chat = await createChatOnServer(userMessage, userInfo);
+        currentChatId = chat._id || chat.id;
+        // last two messages are user then assistant
+        const lastMsg = chat.messages[chat.messages.length - 1];
+        aiPrediction = lastMsg && lastMsg.role === "assistant" ? lastMsg.content : "";
+      } else {
+        const chat = await appendMessageToChat(currentChatId, userMessage, userInfo);
+        const lastMsg = chat.messages[chat.messages.length - 1];
+        aiPrediction = lastMsg && lastMsg.role === "assistant" ? lastMsg.content : "";
       }
+    } catch (e) {
+      aiPrediction = `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${API_BASE}). ลองใหม่ภายหลัง`;
     }
 
     // Display message with typing animation
     await displayMessageWithTyping(aiPrediction, "received");
-
-    // Save state
-    if (serverId) {
-      currentChatId = serverId;
-    } else {
-      // Create local pending record
-      if (!currentChatId || !String(currentChatId).startsWith("local-")) {
-        currentChatId = `local-${Date.now()}`;
-      }
-      addPendingFortune({
-        id: currentChatId,
-        userInfo: userInfo,
-        text: userMessage,
-        prediction: aiPrediction,
-        created_at: new Date().toISOString(),
-      });
-    }
 
     isReplying = false;
     elements.messageInput.disabled = false;
@@ -826,7 +840,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const pending = getPendingFortunes();
-    if (!pending.length) return;
     const remaining = [];
     for (const item of pending) {
       try {
@@ -850,8 +863,60 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     setPendingFortunes(remaining);
-    // Reload combined history after sync
+    // Always refresh from server to reflect remote changes (including deletions)
     await loadFortuneHistory();
+    // Also refresh chat list for cross-device continuity
+    await loadChatHistoryFromServer();
+  }
+
+  async function loadChatHistoryFromServer() {
+    const info = getUserInfoFromForm();
+    const userId = getDeterministicUserId(info);
+    try {
+      const res = await fetch(`${API_BASE}/chat/user/${encodeURIComponent(userId)}`);
+      if (!res.ok) return;
+      const chats = await res.json();
+      const serverChats = (chats || []).map((c) => ({
+        id: c._id || c.id,
+        topic: getTopicDisplayName(info.topicValue),
+        lastMessageTime: new Date(c.updatedAt || c.createdAt).toLocaleString("th-TH"),
+        messages: (c.messages || []).map((m) => ({
+          text: m.content,
+          type: m.role === 'user' ? 'sent' : 'received'
+        })),
+        userInfo: info,
+        source: 'server'
+      }));
+
+      // Keep any local pending that don't collide
+      const localPending = getPendingFortunes().map((p) => ({
+        id: p.id,
+        topic: getTopicDisplayName(p.userInfo.topicValue),
+        lastMessageTime: new Date(p.created_at).toLocaleString("th-TH"),
+        messages: [
+          { text: p.text || "", type: "sent" },
+          { text: p.prediction || "", type: "received" },
+        ],
+        userInfo: p.userInfo,
+        source: "local",
+      }));
+
+      const localOnly = (allHistories || []).filter((h) => h.source === 'local');
+      const localOnlyFiltered = localOnly.filter(
+        (l) => !serverChats.some((sc) => sc.id === l.id) && !localPending.some((p) => p.id === l.id)
+      );
+
+      allHistories = [
+        ...serverChats,
+        ...localPending,
+        ...localOnlyFiltered
+      ].sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+
+      displayHistoryList();
+      saveChatHistoryToLocal();
+    } catch (_) {
+      // ignore
+    }
   }
   function startBackgroundSync() {
     if (syncIntervalId) return;
@@ -884,6 +949,7 @@ document.addEventListener("DOMContentLoaded", () => {
   detectApiBase().then(() => {
     loadUserInfoFromLocal();
     loadFortuneHistory();
+    loadChatHistoryFromServer();
 
     // Check if we should restore a specific chat after loading history
     setTimeout(() => {
