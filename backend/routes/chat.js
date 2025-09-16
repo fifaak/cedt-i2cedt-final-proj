@@ -1,26 +1,17 @@
-const express = require('express');
-const router = express.Router();
-const chatController = require('../controllers/chatController');
+import { Router } from 'express';
+import { createMessage, getHistory, editMessage } from '../controllers/chatController.js';
 
-// Create a new chat session
-router.post('/', chatController.createChat);
+const router = Router();
 
-// Get all chats for a user
-router.get('/user/:userId', chatController.getUserChats);
+// Create a new chat message (send to Typhoon, save to MongoDB)
+router.post('/', createMessage);
 
-// Get a specific chat
-router.get('/:chatId', chatController.getChatById);
+// Retrieve chat history by user (name & birthdate query)
+router.get('/history', getHistory);
 
-// Add a message to a chat
-router.post('/:chatId/messages', chatController.addMessage);
+// Edit a previous user message (and resend to Typhoon)
+router.put('/:id', editMessage);
 
-// Edit a specific message
-router.put('/:chatId/messages/:messageIndex', chatController.editMessage);
+export default router;
 
-// Delete a chat
-router.delete('/:chatId', chatController.deleteChat);
 
-// Delete a specific message
-router.delete('/:chatId/messages/:messageIndex', chatController.deleteMessage);
-
-module.exports = router;

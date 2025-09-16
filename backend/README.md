@@ -1,58 +1,151 @@
-# Backend API
+# Backend - Fortune Chat (Express + Mongo + Typhoon)
 
-Express.js API server for Thai Fortune Telling app with hybrid storage (local + MongoDB sync).
+This service exposes a chat backend with conversation history stored in MongoDB and responses generated via Typhoon.
 
-## Setup
+## Tech stack (server only)
+
+- express
+- mongoose
+- dotenv
+- cors
+
+## Project structure
+
+```
+backend/
+  config/
+    db.js                # Mongo connection helper
+  controllers/
+    chatController.js    # create/history/edit handlers
+  models/
+    ChatMessage.js       # Mongoose schema
+  routes/
+    chat.js              # Express router for /api/chat
+  services/
+    typhoonClient.js     # Typhoon API call using fetch
+  scripts/
+    test_api.sh          # Curl smoke tests (auto-starts server)
+  server.js              # App entry, CORS/JSON + routes + Mongo connect
+  package.json
+```
+
+## Environment variables
+
+- `PORT` (default 3001)
+- `MONGO_URI` MongoDB connection string. Defaults to `mongodb://127.0.0.1:27017/fortune_chat` if unset.
+- `TYPHOON_API_KEY` Typhoon API key (required for live responses)
+- `TYPHOON_MODEL` (default `typhoon-v2.1-12b-instruct`)
+
+Optional for the in-memory sample server:
+
+- `SIMPLE_PORT` (default 4001)
+
+Create a `.env` (see `.env.example` in repo root if present) and set at least `TYPHOON_API_KEY`.
+
+## Install & run
 
 ```bash
+cd backend
 npm install
-npm run dev
+npm start   # starts server on PORT (default 3001)
 ```
 
-## Environment (.env)
+## Scripts
+
+- `npm start`: start the server
+- `npm run dev`: run API smoke tests via `scripts/test_api.sh`
+- `npm run simple`: start a minimal in-memory chat server (no MongoDB)
+
+The test script will:
+- start the server if not already running (on `http://127.0.0.1:3001`)
+- POST a sample chat, GET history, and PUT an edit
+
+## API
+
+- POST `/api/chat` Create a new chat message
+- GET `/api/chat/history?name=...&birthdate=YYYY-MM-DD&limit=100` Get history for user (optional `limit`, max 200)
+- PUT `/api/chat/:id` Edit a previous user message
+- GET `/health` Healthcheck → `{ "status": "ok" }`
+
+### Request body (POST /api/chat)
+
+```json
+{
+  "userInfo": {
+    "name": "Alice",
+    "birthdate": "1995-05-20",
+    "sex": "female",
+    "topic": "career"
+  },
+  "message": "งานปีนี้จะก้าวหน้าไหม?"
+}
+```
+
+### Typhoon prompt format
+
+The server builds `messages` as:
 
 ```
-PORT=3001
-TYPHOON_API_KEY=your_typhoon_api_key_here
-MONGODB_URI=mongodb://localhost:27017/fortune_telling  # Optional
+[
+  { "role": "system", "content": "...includes user information in Thai persona..." },
+  // prior user turns for this user (as {role:"user", content})
+  { "role": "user", "content": "latest user message" }
+]
 ```
 
-## Hybrid Storage System
+For a follow-up like `แล้วความรักล่ะ?`, the server appends another `{role:"user"}` in order after prior turns, matching the required Typhoon schema.
 
-### Local Storage (Primary)
-Data is always stored locally in JSON files:
-- `storage/data/fortunes.json` - Fortune readings
-- `storage/data/chats.json` - Chat sessions
+### Example curls
 
-### MongoDB Sync (Secondary)
-- **Auto-sync**: Checks MongoDB every 60 seconds
-- **Background sync**: Pushes local data to MongoDB when available
-- **No dependency**: App works perfectly without MongoDB
-- **Manual sync**: `POST /api/sync` for immediate sync
+Create message
+```bash
+curl -X POST "http://localhost:3001/api/chat" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "userInfo": {"name":"Alice","birthdate":"1995-05-20","sex":"female","topic":"career"},
+    "message": "ปีนี้งานจะก้าวหน้าไหม?"
+  }'
+```
 
-### Sync Status
-- `GET /api/sync/status` - Check sync status
-- `GET /api/health` - Overall system health including sync status
+Get history
+```bash
+curl "http://localhost:3001/api/chat/history?name=Alice&birthdate=1995-05-20"
+```
 
-## API Endpoints
+Edit message
+```bash
+curl -X PUT "http://localhost:3001/api/chat/REPLACE_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"newMessage":"ถ้าเปลี่ยนงานตอนนี้เหมาะไหม?"}'
+```
 
-### Fortune Management
-- `POST /api/fortune` - Create fortune reading
-- `GET /api/fortune` - Get all fortunes (paginated)
-- `GET /api/fortune/:id` - Get specific fortune
-- `PUT /api/fortune/:id` - Update fortune
-- `DELETE /api/fortune/:id` - Delete fortune
+Fetch limited history (e.g., last 50 documents)
+```bash
+curl "http://localhost:3001/api/chat/history?name=Alice&birthdate=1995-05-20&limit=50"
+```
 
-### Chat System
-- `POST /api/chat` - Chat with AI (no storage)
-- `POST /api/chat/` - Create chat session
-- `GET /api/chat/user/:userId` - Get user chats
-- `GET /api/chat/:chatId` - Get specific chat
-- `POST /api/chat/:chatId/messages` - Add message
-- `PUT /api/chat/:chatId/messages/:index` - Edit message
-- `DELETE /api/chat/:chatId` - Delete chat
+## Data model (Mongo)
 
-### System
-- `GET /api/health` - System health
-- `POST /api/sync` - Manual sync
-- `GET /api/sync/status` - Sync status
+Collection: `chatmessages`
+
+```json
+{
+  "userInfo": {
+    "name": "string",
+    "birthdate": "YYYY-MM-DD",
+    "sex": "male|female|other",                  // enum
+    "topic": "overall|career|finance|love|health" // enum
+  },
+  "systemPrompt": "string",
+  "userMessage": "string",
+  "assistantResponse": "string",
+  "createdAt": "date",
+  "updatedAt": "date"
+}
+```
+
+## Frontend integration notes
+
+- Base URL: `http://localhost:${PORT}` (default `http://localhost:3001`)
+- CORS is enabled broadly (`app.use(cors())`).
+- Send user info and the latest message; backend will include prior user turns automatically.
