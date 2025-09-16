@@ -36,6 +36,10 @@ backend/
 - `TYPHOON_API_KEY` Typhoon API key (required for live responses)
 - `TYPHOON_MODEL` (default `typhoon-v2.1-12b-instruct`)
 
+Optional for the in-memory sample server:
+
+- `SIMPLE_PORT` (default 4001)
+
 Create a `.env` (see `.env.example` in repo root if present) and set at least `TYPHOON_API_KEY`.
 
 ## Install & run
@@ -50,6 +54,7 @@ npm start   # starts server on PORT (default 3001)
 
 - `npm start`: start the server
 - `npm run dev`: run API smoke tests via `scripts/test_api.sh`
+- `npm run simple`: start a minimal in-memory chat server (no MongoDB)
 
 The test script will:
 - start the server if not already running (on `http://127.0.0.1:3001`)
@@ -58,7 +63,7 @@ The test script will:
 ## API
 
 - POST `/api/chat` Create a new chat message
-- GET `/api/chat/history?name=...&birthdate=YYYY-MM-DD` Get history for user
+- GET `/api/chat/history?name=...&birthdate=YYYY-MM-DD&limit=100` Get history for user (optional `limit`, max 200)
 - PUT `/api/chat/:id` Edit a previous user message
 - GET `/health` Healthcheck → `{ "status": "ok" }`
 
@@ -114,6 +119,11 @@ curl -X PUT "http://localhost:3001/api/chat/REPLACE_ID" \
   -d '{"newMessage":"ถ้าเปลี่ยนงานตอนนี้เหมาะไหม?"}'
 ```
 
+Fetch limited history (e.g., last 50 documents)
+```bash
+curl "http://localhost:3001/api/chat/history?name=Alice&birthdate=1995-05-20&limit=50"
+```
+
 ## Data model (Mongo)
 
 Collection: `chatmessages`
@@ -123,8 +133,8 @@ Collection: `chatmessages`
   "userInfo": {
     "name": "string",
     "birthdate": "YYYY-MM-DD",
-    "sex": "male|female|other",
-    "topic": "overall|career|finance|love|health"
+    "sex": "male|female|other",                  // enum
+    "topic": "overall|career|finance|love|health" // enum
   },
   "systemPrompt": "string",
   "userMessage": "string",

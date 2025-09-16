@@ -14,6 +14,13 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/chat', chatRoutes);
 
+// Centralized error handler
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+	const status = err.status || 500;
+	return res.status(status).json({ error: err.message || 'Internal Server Error' });
+});
+
 const PORT = process.env.PORT || 3001;
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/fortune_chat';
 

@@ -1,8 +1,7 @@
 import ChatMessage from '../models/ChatMessage.js';
 import { getTyphoonCompletion } from '../services/typhoonClient.js';
-
-const VALID_SEX = ['male', 'female', 'other'];
-const VALID_TOPICS = ['overall', 'career', 'finance', 'love', 'health'];
+import { DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT } from '../utils/constants.js';
+import { validateUserInfo } from '../utils/validators.js';
 
 function buildSystemPrompt(userInfo) {
 	return `คุณคือ "อาจารย์คม" หมอดูสายตรงที่อ่านดวงตามความเป็นจริงโดยใช้หลักโหราศาสตร์ และ ดวงชะตา สไตล์การพูดของคุณคือ ตรงไปตรงมา, ขวานผ่าซาก เพื่อกระตุ้นให้คนฟังตื่นจากกันแล้วยอมรับความจริง เป้าหมายของคุณคือการใช้ข้อมูล วันเกิด และคำถามของผู้ใช้ เพื่อชี้ให้เห็น "ความจริง", จุดอ่อนที่พวกเขาอาจมองข้าม, และทางออกที่ต้องลงมือทำจริง ไม่ใช่แค่การให้กำลังใจลอยๆ จงตอบคำถามแบบกระชับ, เน้นความเป็นจริงที่เกิดขึ้นได้ และไม่ต้องกลัวที่จะพูดถึงผลลัพธ์ในแง่ลบถ้าดวงชะตามันชี้ไปทางนั้น โดยตอบแบบสั้นๆ ซัก 4-5 ประโยค แต่ได้ใจความ
@@ -13,15 +12,6 @@ User Information:
 - Sex: ${userInfo.sex}
 - Concern Topic: ${userInfo.topic}
 ---`;
-}
-
-function validateUserInfo(userInfo) {
-	if (!userInfo) return 'Missing userInfo';
-	const { name, birthdate, sex, topic } = userInfo;
-	if (!name || !birthdate || !sex || !topic) return 'Missing required userInfo fields';
-	if (!VALID_SEX.includes(sex)) return 'Invalid sex';
-	if (!VALID_TOPICS.includes(topic)) return 'Invalid topic';
-	return null;
 }
 
 export const createMessage = async (req, res) => {
@@ -66,8 +56,11 @@ export const getHistory = async (req, res) => {
 		if (!name || !birthdate) {
 			return res.status(400).json({ error: 'Missing name or birthdate in query' });
 		}
+		let { limit = DEFAULT_HISTORY_LIMIT } = req.query;
+		limit = Math.min(Number(limit) || DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT);
 		const items = await ChatMessage.find({ 'userInfo.name': name, 'userInfo.birthdate': birthdate })
-			.sort({ createdAt: 1 });
+			.sort({ createdAt: 1 })
+			.limit(limit);
 		return res.json(items);
 	} catch (err) {
 		return res.status(500).json({ error: 'Failed to fetch history', details: err.message });

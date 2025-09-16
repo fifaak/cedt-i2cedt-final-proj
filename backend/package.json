@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "BASE_URL=http://127.0.0.1:3001 START_SERVER=auto ./scripts/test_api.sh"
+    "dev": "BASE_URL=http://127.0.0.1:3001 START_SERVER=auto ./scripts/test_api.sh",
+    "simple": "node simpleServer.js"
   },
   "keywords": [],
   "author": "",
