@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการแก้ไข</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>ทดสอบการแก้ไขปัญหา</h1>
+    
+    <div class="test-section success">
+        <h3>✅ ปัญหาที่แก้ไขแล้ว:</h3>
+        <ul>
+            <li><strong>ประวัติแชทหายเมื่อรีเฟรช:</strong> เพิ่มการบันทึกและโหลดประวัติแชทใน localStorage</li>
+            <li><strong>ปุ่มแชทใหม่จมในมือถือ:</strong> ปรับ CSS layout ให้ปุ่มอยู่ด้านล่างเสมอ</li>
+        </ul>
+    </div>
+
+    <div class="test-section info">
+        <h3>🔧 การเปลี่ยนแปลงที่ทำ:</h3>
+        
+        <h4>JavaScript (scripts.js):</h4>
+        <ul>
+            <li>เพิ่ม localStorage keys: CHAT_HISTORY, CURRENT_CHAT</li>
+            <li>เพิ่มฟังก์ชัน saveChatHistoryToLocal() และ loadChatHistoryFromLocal()</li>
+            <li>ปรับปรุง saveCurrentChat() ให้บันทึกประวัติแชท</li>
+            <li>ปรับปรุง loadFortuneHistory() ให้โหลดประวัติจาก localStorage</li>
+            <li>ปรับปรุง resetApplication() และ handleDeleteChat() ให้จัดการ localStorage</li>
+            <li>เปลี่ยนการเริ่มต้นแอปให้โหลดประวัติแชทก่อน</li>
+        </ul>
+
+        <h4>CSS (styles.css):</h4>
+        <ul>
+            <li>ปรับ layout ของ sidebar ให้ #user-info-section มีขนาดคงที่</li>
+            <li>ให้ #history-section ขยายตามพื้นที่ที่เหลือ</li>
+            <li>ทำให้ #new-chat-btn อยู่ด้านล่างเสมอ (margin-top: auto)</li>
+            <li>ปรับ responsive design สำหรับมือถือ:</li>
+            <ul>
+                <li>จำกัดความสูงของ user-info-section</li>
+                <li>ทำให้ new-chat-btn เป็น sticky position</li>
+                <li>เพิ่ม box-shadow และ border ให้เด่นชัด</li>
+            </ul>
+        </ul>
+    </div>
+
+    <div class="test-section info">
+        <h3>📱 การทดสอบ:</h3>
+        <p>เปิดแอปดูดวงและทดสอบ:</p>
+        <ol>
+            <li>กรอกข้อมูลและส่งข้อความ</li>
+            <li>รีเฟรชหน้าเว็บ → ประวัติแชทควรยังอยู่</li>
+            <li>เปิดในมือถือ → ปุ่ม "แชทใหม่" ควรอยู่ด้านล่างและมองเห็นได้</li>
+            <li>ลองสร้างแชทหลายๆ อัน → ประวัติควรบันทึกทั้งหมด</li>
+        </ol>
+    </div>
+
+    <script>
+        // ทดสอบ localStorage functions
+        function testLocalStorage() {
+            console.log('Testing localStorage...');
+            
+            // Test data
+            const testData = {
+                chatHistory: [
+                    { id: 'test-1', topic: 'ทดสอบ', messages: [{ text: 'สวัสดี', type: 'sent' }] }
+                ],
+                currentChat: 'test-1'
+            };
+            
+            try {
+                localStorage.setItem('chatHistory', JSON.stringify(testData.chatHistory));
+                localStorage.setItem('currentChat', testData.currentChat);
+                
+                const retrieved = {
+                    chatHistory: JSON.parse(localStorage.getItem('chatHistory')),
+                    currentChat: localStorage.getItem('currentChat')
+                };
+                
+                console.log('✅ localStorage test passed:', retrieved);
+                alert('✅ localStorage ทำงานได้ปกติ');
+            } catch (e) {
+                console.error('❌ localStorage test failed:', e);
+                alert('❌ localStorage ไม่ทำงาน: ' + e.message);
+            }
+        }
+        
+        // Add test button
+        const testBtn = document.createElement('button');
+        testBtn.textContent = 'ทดสอบ localStorage';
+        testBtn.onclick = testLocalStorage;
+        document.body.appendChild(testBtn);
+    </script>
+</body>
+</html>

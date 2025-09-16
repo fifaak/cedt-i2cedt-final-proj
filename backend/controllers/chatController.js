@@ -1,90 +1,145 @@
-import ChatMessage from '../models/ChatMessage.js';
-import { getTyphoonCompletion } from '../services/typhoonClient.js';
+const localStorage = require('../storage/localStorage');
 
-const VALID_SEX = ['male', 'female', 'other'];
-const VALID_TOPICS = ['overall', 'career', 'finance', 'love', 'health'];
+// Create a new chat session
+exports.createChat = async (req, res) => {
+  try {
+    const { userId, message } = req.body;
+    
+    const newChat = await localStorage.createChat({
+      userId,
+      messages: [{
+        content: message,
+        role: 'user',
+        timestamp: new Date().toISOString(),
+        edited: false,
+        editHistory: []
+      }]
+    });
 
-function buildSystemPrompt(userInfo) {
-	return `คุณคือ "อาจารย์คม" หมอดูสายตรงที่อ่านดวงตามความเป็นจริงโดยใช้หลักโหราศาสตร์ และ ดวงชะตา สไตล์การพูดของคุณคือ ตรงไปตรงมา, ขวานผ่าซาก เพื่อกระตุ้นให้คนฟังตื่นจากกันแล้วยอมรับความจริง เป้าหมายของคุณคือการใช้ข้อมูล วันเกิด และคำถามของผู้ใช้ เพื่อชี้ให้เห็น "ความจริง", จุดอ่อนที่พวกเขาอาจมองข้าม, และทางออกที่ต้องลงมือทำจริง ไม่ใช่แค่การให้กำลังใจลอยๆ จงตอบคำถามแบบกระชับ, เน้นความเป็นจริงที่เกิดขึ้นได้ และไม่ต้องกลัวที่จะพูดถึงผลลัพธ์ในแง่ลบถ้าดวงชะตามันชี้ไปทางนั้น โดยตอบแบบสั้นๆ ซัก 4-5 ประโยค แต่ได้ใจความ
----
-User Information:
-- Name: ${userInfo.name}
-- Birthdate: ${userInfo.birthdate}
-- Sex: ${userInfo.sex}
-- Concern Topic: ${userInfo.topic}
----`;
-}
-
-function validateUserInfo(userInfo) {
-	if (!userInfo) return 'Missing userInfo';
-	const { name, birthdate, sex, topic } = userInfo;
-	if (!name || !birthdate || !sex || !topic) return 'Missing required userInfo fields';
-	if (!VALID_SEX.includes(sex)) return 'Invalid sex';
-	if (!VALID_TOPICS.includes(topic)) return 'Invalid topic';
-	return null;
-}
-
-export const createMessage = async (req, res) => {
-	try {
-		const { userInfo, message } = req.body;
-		const error = validateUserInfo(userInfo);
-		if (error) return res.status(400).json({ error });
-		if (!message || typeof message !== 'string') {
-			return res.status(400).json({ error: 'Missing message' });
-		}
-
-		const systemPrompt = buildSystemPrompt(userInfo);
-		const { content } = await getTyphoonCompletion(systemPrompt, message);
-
-		const saved = await ChatMessage.create({
-			userInfo,
-			systemPrompt,
-			userMessage: message,
-			assistantResponse: content,
-		});
-
-		return res.status(201).json(saved);
-	} catch (err) {
-		return res.status(500).json({ error: 'Failed to create message', details: err.message });
-	}
+    res.status(201).json(newChat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error creating chat session' });
+  }
 };
 
-export const getHistory = async (req, res) => {
-	try {
-		const { name, birthdate } = req.query;
-		if (!name || !birthdate) {
-			return res.status(400).json({ error: 'Missing name or birthdate in query' });
-		}
-		const items = await ChatMessage.find({ 'userInfo.name': name, 'userInfo.birthdate': birthdate })
-			.sort({ createdAt: 1 });
-		return res.json(items);
-	} catch (err) {
-		return res.status(500).json({ error: 'Failed to fetch history', details: err.message });
-	}
+// Get all chats for a user
+exports.getUserChats = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const chats = await localStorage.getChatsByUserId(userId);
+    res.json(chats);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching chats' });
+  }
 };
 
-export const editMessage = async (req, res) => {
-	try {
-		const { id } = req.params;
-		const { newMessage } = req.body;
-		if (!newMessage || typeof newMessage !== 'string') {
-			return res.status(400).json({ error: 'Missing newMessage' });
-		}
-		const existing = await ChatMessage.findById(id);
-		if (!existing) return res.status(404).json({ error: 'Message not found' });
-
-		const systemPrompt = buildSystemPrompt(existing.userInfo);
-		const { content } = await getTyphoonCompletion(systemPrompt, newMessage);
-
-		existing.userMessage = newMessage;
-		existing.systemPrompt = systemPrompt;
-		existing.assistantResponse = content;
-		await existing.save();
-
-		return res.json(existing);
-	} catch (err) {
-		return res.status(500).json({ error: 'Failed to edit message', details: err.message });
-	}
+// Get a specific chat by ID
+exports.getChatById = async (req, res) => {
+  try {
+    const chat = await localStorage.getChatById(req.params.chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    res.json(chat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching chat' });
+  }
 };
 
+// Add a message to an existing chat
+exports.addMessage = async (req, res) => {
+  try {
+    const { content, role } = req.body;
+    const chat = await localStorage.getChatById(req.params.chatId);
+    
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
 
+    chat.messages.push({
+      content,
+      role,
+      timestamp: new Date().toISOString(),
+      edited: false,
+      editHistory: []
+    });
+
+    const updatedChat = await localStorage.updateChat(req.params.chatId, chat);
+    res.json(updatedChat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error adding message' });
+  }
+};
+
+// Edit a specific message in a chat
+exports.editMessage = async (req, res) => {
+  try {
+    const { chatId, messageIndex } = req.params;
+    const { content } = req.body;
+    
+    const chat = await localStorage.getChatById(chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    if (messageIndex >= chat.messages.length) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Store the current message in edit history
+    const currentMessage = chat.messages[messageIndex];
+    if (!currentMessage.editHistory) {
+      currentMessage.editHistory = [];
+    }
+    
+    currentMessage.editHistory.push({
+      content: currentMessage.content,
+      timestamp: new Date().toISOString()
+    });
+
+    // Update the message
+    currentMessage.content = content;
+    currentMessage.edited = true;
+    currentMessage.timestamp = new Date().toISOString();
+
+    const updatedChat = await localStorage.updateChat(chatId, chat);
+    res.json(updatedChat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error editing message' });
+  }
+};
+
+// Delete a chat
+exports.deleteChat = async (req, res) => {
+  try {
+    const chat = await localStorage.deleteChat(req.params.chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    res.json({ message: 'Chat deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting chat' });
+  }
+};
+
+// Delete a specific message from a chat
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { chatId, messageIndex } = req.params;
+    
+    const chat = await localStorage.getChatById(chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    if (messageIndex >= chat.messages.length) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    chat.messages.splice(messageIndex, 1);
+    const updatedChat = await localStorage.updateChat(chatId, chat);
+    res.json(updatedChat);
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting message' });
+  }
+};
