@@ -1,12 +1,7 @@
 {
   "name": "thai-fortune-backend",
   "version": "1.0.0",
-  "description": "Thai Fortune Telling Backend API",
   "main": "server.js",
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
-  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"

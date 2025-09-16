@@ -84,7 +84,7 @@ function makeHttpsRequest(url, options) {
 // Initialize services
 console.log("🔄 Initializing storage and sync services...");
 const mongoSync = new MongoSync();
-mongoSync.startPeriodicSync(10000); // Sync every 10 seconds
+mongoSync.startPeriodicSync(60000); // Sync every 60 seconds
 
 async function getAiPrediction(userInfo, userMessage) {
   const API_KEY = process.env.TYPHOON_API_KEY;

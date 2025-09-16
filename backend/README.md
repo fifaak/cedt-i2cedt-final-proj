@@ -25,7 +25,7 @@ Data is always stored locally in JSON files:
 - `storage/data/chats.json` - Chat sessions
 
 ### MongoDB Sync (Secondary)
-- **Auto-sync**: Checks MongoDB every 10 seconds
+- **Auto-sync**: Checks MongoDB every 60 seconds
 - **Background sync**: Pushes local data to MongoDB when available
 - **No dependency**: App works perfectly without MongoDB
 - **Manual sync**: `POST /api/sync` for immediate sync

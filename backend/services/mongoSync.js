@@ -256,7 +256,7 @@ class MongoSync {
     }
   }
 
-  startPeriodicSync(intervalMs = 10000) {
+  startPeriodicSync(intervalMs = 60000) {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }

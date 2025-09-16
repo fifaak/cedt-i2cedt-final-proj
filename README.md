@@ -64,6 +64,7 @@ thai-fortune-app/
 ## Features
 
 ### 🔮 **Core Features**
+
 - **AI Fortune Teller**: Chat with "อาจารย์คม" using Typhoon AI
 - **User Profiles**: Name, birthdate, gender, topic selection
 - **Chat History**: Hybrid storage (local files + MongoDB sync) with pagination
@@ -71,6 +72,7 @@ thai-fortune-app/
 - **Error Handling**: Graceful error recovery
 
 ### 🎨 **UI/UX Features**
+
 - **Typing Animation**: Realistic typing effect for AI responses with variable speed
 - **Typing Indicator**: Animated "อาจารย์คมกำลังเพ่งดวง..." while waiting for response
 - **Improved Text Input**: Taller textarea (3 rows) with auto-resize
@@ -81,6 +83,7 @@ thai-fortune-app/
 - **Dark Theme**: Modern dark theme with gold accents
 
 ### 🔧 **Technical Features**
+
 - **Hybrid Storage**: Local-first with MongoDB sync
 - **Auto-Sync**: Background sync every 10 seconds
 - **Health Monitoring**: API health check and sync status endpoints
@@ -104,6 +107,9 @@ thai-fortune-app/
 
 # Or manually:
 npm run install:all
+
+# Start both servers
+./start-servers.sh
 ```
 
 ### Manual Setup
@@ -122,7 +128,7 @@ npm run install:all
 
 # Or install individually:
 npm install                    # Root dependencies
-npm install --prefix backend   # Backend dependencies  
+npm install --prefix backend   # Backend dependencies
 npm install --prefix frontend  # Frontend dependencies
 ```
 
@@ -157,53 +163,51 @@ npm start
 The app uses a **hybrid storage approach** that provides the best of both worlds:
 
 ### 🔄 **How it Works**
+
 - **Primary Storage**: Local JSON files (always available)
 - **Secondary Storage**: MongoDB (syncs when available)
-- **Auto-Sync**: Checks MongoDB every 10 seconds and syncs local data
+- **Auto-Sync**: Checks MongoDB every 60 seconds and syncs local data
 - **Offline-First**: App works perfectly without MongoDB
 
 ### 📁 **Data Flow**
+
 1. All data is **immediately saved locally** (instant response)
-2. Background service **checks MongoDB availability** every 10 seconds
+2. Background service **checks MongoDB availability** every 60 seconds
 3. When MongoDB is available, **local data syncs automatically**
 4. **No data loss** - local files persist even if MongoDB is down
-
-### 🎯 **Benefits**
-- ✅ **Always works** - no database dependency
-- ✅ **No data loss** - local persistence guaranteed  
-- ✅ **Auto-sync** - seamless MongoDB integration when available
-- ✅ **Performance** - instant local responses
-- ✅ **Scalability** - MongoDB for production, local for development
 
 ## API Endpoints
 
 ### Fortune Telling
-| Method | Endpoint           | Description                    | Request Body |
-| ------ | ------------------ | ------------------------------ | ------------ |
-| POST   | `/api/fortune`     | Create fortune reading         | `{name, birthdate, sex, topic, text}` |
-| GET    | `/api/fortune`     | Get all fortunes (paginated)   | Query: `?limit=50&page=1` |
-| GET    | `/api/fortune/:id` | Get specific fortune           | - |
-| PUT    | `/api/fortune/:id` | Update fortune                 | `{name, birthdate, sex, topic, text}` |
-| DELETE | `/api/fortune/:id` | Delete fortune                 | - |
+
+| Method | Endpoint           | Description                  | Request Body                          |
+| ------ | ------------------ | ---------------------------- | ------------------------------------- |
+| POST   | `/api/fortune`     | Create fortune reading       | `{name, birthdate, sex, topic, text}` |
+| GET    | `/api/fortune`     | Get all fortunes (paginated) | Query: `?limit=50&page=1`             |
+| GET    | `/api/fortune/:id` | Get specific fortune         | -                                     |
+| PUT    | `/api/fortune/:id` | Update fortune               | `{name, birthdate, sex, topic, text}` |
+| DELETE | `/api/fortune/:id` | Delete fortune               | -                                     |
 
 ### Chat
-| Method | Endpoint           | Description                    | Request Body |
-| ------ | ------------------ | ------------------------------ | ------------ |
-| POST   | `/api/chat`        | Chat with AI (no storage)     | `{message, userInfo}` |
-| POST   | `/api/chat/`       | Create new chat session       | `{userId, message}` |
-| GET    | `/api/chat/user/:userId` | Get user's chat history  | - |
-| GET    | `/api/chat/:chatId` | Get specific chat             | - |
-| POST   | `/api/chat/:chatId/messages` | Add message to chat | `{content, role}` |
-| PUT    | `/api/chat/:chatId/messages/:index` | Edit message | `{content}` |
-| DELETE | `/api/chat/:chatId` | Delete chat                   | - |
-| DELETE | `/api/chat/:chatId/messages/:index` | Delete message | - |
+
+| Method | Endpoint                            | Description               | Request Body          |
+| ------ | ----------------------------------- | ------------------------- | --------------------- |
+| POST   | `/api/chat`                         | Chat with AI (no storage) | `{message, userInfo}` |
+| POST   | `/api/chat/`                        | Create new chat session   | `{userId, message}`   |
+| GET    | `/api/chat/user/:userId`            | Get user's chat history   | -                     |
+| GET    | `/api/chat/:chatId`                 | Get specific chat         | -                     |
+| POST   | `/api/chat/:chatId/messages`        | Add message to chat       | `{content, role}`     |
+| PUT    | `/api/chat/:chatId/messages/:index` | Edit message              | `{content}`           |
+| DELETE | `/api/chat/:chatId`                 | Delete chat               | -                     |
+| DELETE | `/api/chat/:chatId/messages/:index` | Delete message            | -                     |
 
 ### System
-| Method | Endpoint           | Description                    | Response |
-| ------ | ------------------ | ------------------------------ | -------- |
-| GET    | `/api/health`      | System health check            | `{status, storage, sync, nodeVersion}` |
-| POST   | `/api/sync`        | Manual MongoDB sync            | `{success, message, details}` |
-| GET    | `/api/sync/status` | Check sync status              | `{isConnected, syncActive, mongoState}` |
+
+| Method | Endpoint           | Description         | Response                                |
+| ------ | ------------------ | ------------------- | --------------------------------------- |
+| GET    | `/api/health`      | System health check | `{status, storage, sync, nodeVersion}`  |
+| POST   | `/api/sync`        | Manual MongoDB sync | `{success, message, details}`           |
+| GET    | `/api/sync/status` | Check sync status   | `{isConnected, syncActive, mongoState}` |
 
 ## Tech Stack
 
@@ -223,16 +227,38 @@ The app uses a **hybrid storage approach** that provides the best of both worlds
 
 ## Dependencies
 
-### Backend Dependencies
+### Backend Dependencies (Compliant)
 
 - `cors` - Cross-origin resource sharing
 - `dotenv` - Environment variable management
-- `express` - Web application framework
+- `express` - Web application framework (only allowed backend framework)
 - `mongoose` - MongoDB object modeling (for sync)
 
-### Frontend Dependencies
+### Frontend Dependencies (Compliant)
 
-- `express` - Static file server
+- `express` - Static file server only
+- **CDN Usage**: Google Fonts CSS only (stylesheets allowed, scripts prohibited)
+
+## Compliance
+
+### ✅ **Requirements Met**
+
+- **Backend Framework**: Express.js only (no other frameworks)
+- **Dependencies**: Only allowed packages (cors, dotenv, express, mongoose)
+- **CDN Usage**: Google Fonts CSS only (no script CDNs)
+- **MongoDB**: Atlas cloud connection with 60-second sync interval
+- **Local Storage**: Primary storage with MongoDB as secondary sync
+
+### 📋 **Dependency Verification**
+
+```bash
+# Quick verification of all requirements
+./verify-setup.sh
+
+# Manual dependency check
+cd backend && npm list --depth=0
+cd ../frontend && npm list --depth=0
+```
 
 ## License
 
