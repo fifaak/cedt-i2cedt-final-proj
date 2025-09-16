@@ -213,13 +213,16 @@ header h1 {
 #chat-container {
     grid-column: 2 / 3;
     grid-row: 2 / 3;
-    padding: 30px;
+    padding: 48px 30px 30px; /* base padding, overridden below */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 15px;
     background-color: transparent;
+    scroll-behavior: smooth; /* smoother UX when we do autoscroll */
 }
+/* Start content roughly 20% below navbar using container padding (safer than margin) */
+#chat-container { padding-top: max(20vh, 500px); }
 #input-area {
     grid-column: 2 / 3;
     grid-row: 3 / 3;
@@ -530,7 +533,7 @@ header h1 {
 
     .hamburger { display: inline-flex; align-items: center; justify-content: center; }
 
-    #chat-container { grid-column: 1 / -1; padding: 20px 15px; }
+    #chat-container { grid-column: 1 / -1; padding: 36px 15px 15px; padding-top: min(20vh, 120px); }
     #input-area { grid-column: 1 / -1; padding: 15px; }
 
     .message { max-width: 90%; }

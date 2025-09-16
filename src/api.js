@@ -45,7 +45,7 @@ export async function getAiReplyOnline(userMessage, userInfo) {
 
 export async function updateFortuneOnDB(fortuneId, userInfo, newText) {
   try {
-    const response = await fetch(`${appState.apiBase}/fortune/${fortuneId}`, {
+    const response = await fetch(`${appState.apiBase}/fortune/${encodeURIComponent(fortuneId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -67,7 +67,7 @@ export async function updateFortuneOnDB(fortuneId, userInfo, newText) {
 
 export async function deleteFortuneFromDB(fortuneId) {
   try {
-    const response = await fetch(`${appState.apiBase}/fortune/${fortuneId}`, {
+    const response = await fetch(`${appState.apiBase}/fortune/${encodeURIComponent(fortuneId)}`, {
       method: "DELETE",
     });
     return response.ok;

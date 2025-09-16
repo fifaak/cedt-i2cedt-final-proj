@@ -187,6 +187,7 @@ async function loadFortuneHistory() {
   const serverFortunesRaw = await fetchFortunesFromServer();
   // Group server fortunes into threaded sessions per user+topic
   const sessions = groupFortunesIntoSessions(serverFortunesRaw);
+  // Keep ascending order so latest is at the bottom of the list
   appState.allHistories = sessions.map((s) => ({
     id: s.id,
     topic: s.topic,

@@ -5,7 +5,9 @@ import { deleteFortuneFromDB } from "./api.js";
 
 export function displayHistoryList() {
   elements.historyList.innerHTML = "";
-  appState.allHistories.forEach((chat) => {
+  // Ensure latest chats appear at the bottom
+  const ordered = [...appState.allHistories].sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
+  ordered.forEach((chat) => {
     const li = document.createElement("li");
     li.dataset.id = chat.id;
     const chatInfo = document.createElement("div");
@@ -68,7 +70,7 @@ export function mergeHistories(serverFortunes, pending) {
   const existingIds = new Set(appState.allHistories.map((h) => h.id));
   const newServerFortunes = serverFortunes.filter((sf) => !existingIds.has(sf.id));
   appState.allHistories = [...appState.allHistories, ...newServerFortunes]
-    .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+    .sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
 }
 
 export function mapServerFortunes(fortunes) {
@@ -92,7 +94,9 @@ export function mapServerFortunes(fortunes) {
 
 export function groupFortunesIntoSessions(fortunes) {
   const sessions = new Map();
-  for (const f of fortunes) {
+  // Ensure chronological order within each session (oldest -> newest)
+  const chronological = [...fortunes].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  for (const f of chronological) {
     const key = `${(f.name || '').trim()}|${(f.birthdate || '').trim()}|${(f.sex || '').trim()}|${(f.topic || '').trim()}`;
     const displayTopic = getTopicDisplayName(f.topic);
     if (!sessions.has(key)) {
@@ -116,7 +120,7 @@ export function groupFortunesIntoSessions(fortunes) {
     s.lastMessageTime = new Date(f.created_at).toLocaleString("th-TH");
   }
   return Array.from(sessions.values()).sort(
-    (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+    (a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime)
   );
 }
 
