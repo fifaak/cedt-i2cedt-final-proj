@@ -54,9 +54,9 @@ app.use('/api', (req, res) => {
 	proxyReq.end();
 });
 
-// Serve static files from the public directory
+// Serve static files from the public and src directories
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/src', express.static(path.join(__dirname, 'src')));
+app.use('/src', express.static(path.join(__dirname, 'src'), { setHeaders: (res) => res.set('Content-Type', 'application/javascript') }));
 
 // Serve the main HTML file for all other routes (SPA support)
 app.get('*', (req, res) => {
