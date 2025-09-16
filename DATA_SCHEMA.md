@@ -79,18 +79,20 @@ Request Body example
 - Path: `/fortune`
 - Request: No body
 - Response 200 Application/JSON
+Note: API responses surface `id` (string) instead of Mongo's internal `_id`.
+
 ```json
 {
   "fortunes": [
     {
-      "id": "string",
+      "id": "string",            
       "name": "string",
       "birthdate": "string",
       "sex": "string",
       "topic": "string",
       "text": "string",
       "prediction": "string",
-      "created_at": "string"
+      "created_at": "string"     
     }
   ]
 }

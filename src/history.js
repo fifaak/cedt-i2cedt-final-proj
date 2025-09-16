@@ -48,6 +48,8 @@ export function loadSpecificChat(chatId) {
   }
   appState.currentChatId = chatId;
   appState.isUserInfoSubmitted = true;
+  // Notify listeners so they can attach behaviors (e.g., click-to-edit on sent messages)
+  document.dispatchEvent(new CustomEvent("chat:loaded", { detail: { chatId } }));
 }
 
 export async function handleDeleteChat(chatId) {
@@ -86,6 +88,36 @@ export function mapServerFortunes(fortunes) {
     },
     source: "server",
   }));
+}
+
+export function groupFortunesIntoSessions(fortunes) {
+  const sessions = new Map();
+  for (const f of fortunes) {
+    const key = `${(f.name || '').trim()}|${(f.birthdate || '').trim()}|${(f.sex || '').trim()}|${(f.topic || '').trim()}`;
+    const displayTopic = getTopicDisplayName(f.topic);
+    if (!sessions.has(key)) {
+      sessions.set(key, {
+        id: key,
+        topic: displayTopic,
+        lastMessageTime: new Date(f.created_at).toLocaleString("th-TH"),
+        messages: [],
+        userInfo: {
+          name: f.name,
+          gender: f.sex,
+          dob: f.birthdate,
+          topicValue: f.topic,
+        },
+        source: "server",
+      });
+    }
+    const s = sessions.get(key);
+    s.messages.push({ text: f.text || "", type: "sent" });
+    s.messages.push({ text: f.prediction || "", type: "received" });
+    s.lastMessageTime = new Date(f.created_at).toLocaleString("th-TH");
+  }
+  return Array.from(sessions.values()).sort(
+    (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+  );
 }
 
 

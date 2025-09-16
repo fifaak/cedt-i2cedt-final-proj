@@ -3,7 +3,7 @@ import { PLACEHOLDERS, getTopicDisplayName } from "./constants.js";
 import { appState } from "./state.js";
 import { detectApiBase, getAiReplyOnline, updateFortuneOnDB, fetchFortunesFromServer } from "./api.js";
 import { getUserInfoFromForm } from "./storage.js";
-import { displayHistoryList, mapServerFortunes, mergeHistories } from "./history.js";
+import { displayHistoryList, mapServerFortunes, mergeHistories, groupFortunesIntoSessions } from "./history.js";
 import { setChatState, showTypingIndicator, displayMessage, displayMessageWithTyping } from "./ui.js";
 
 // --- Validation helpers (must match DATA_SCHEMA.md) ---
@@ -185,9 +185,16 @@ function resetApplication() {
 
 async function loadFortuneHistory() {
   const serverFortunesRaw = await fetchFortunesFromServer();
-  const serverFortunes = mapServerFortunes(serverFortunesRaw);
-  appState.allHistories = [];
-  mergeHistories(serverFortunes, []);
+  // Group server fortunes into threaded sessions per user+topic
+  const sessions = groupFortunesIntoSessions(serverFortunesRaw);
+  appState.allHistories = sessions.map((s) => ({
+    id: s.id,
+    topic: s.topic,
+    lastMessageTime: s.lastMessageTime,
+    messages: s.messages,
+    userInfo: s.userInfo,
+    source: s.source,
+  }));
   displayHistoryList();
 }
 
@@ -223,6 +230,12 @@ document.addEventListener("DOMContentLoaded", () => {
     loadFortuneHistory();
   });
   setChatState(false);
+});
+
+// When a chat session is loaded from history, attach click-to-edit on user messages
+document.addEventListener("chat:loaded", () => {
+  const sentParas = Array.from(document.querySelectorAll("#chat-container .message.sent p"));
+  sentParas.forEach((p) => attachEditOnSentMessage(p));
 });
 
 
