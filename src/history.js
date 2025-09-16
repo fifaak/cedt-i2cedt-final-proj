@@ -2,7 +2,6 @@ import { elements } from "./dom.js";
 import { appState } from "./state.js";
 import { getTopicDisplayName } from "./constants.js";
 import { deleteFortuneFromDB } from "./api.js";
-import { removePendingFortuneById } from "./storage.js";
 
 export function displayHistoryList() {
   elements.historyList.innerHTML = "";
@@ -54,16 +53,6 @@ export function loadSpecificChat(chatId) {
 export async function handleDeleteChat(chatId) {
   const confirmDelete = confirm("คุณแน่ใจหรือไม่ที่จะลบแชทนี้? การกระทำนี้ไม่สามารถย้อนกลับได้");
   if (!confirmDelete) return;
-  if (String(chatId).startsWith("local-")) {
-    removePendingFortuneById(chatId);
-    appState.allHistories = appState.allHistories.filter((chat) => chat.id !== chatId);
-    displayHistoryList();
-    if (appState.currentChatId === chatId) {
-      appState.currentChatId = null;
-    }
-    alert("ลบแชทในเครื่องเรียบร้อยแล้ว");
-    return;
-  }
   const success = await deleteFortuneFromDB(chatId);
   appState.allHistories = appState.allHistories.filter((chat) => chat.id !== chatId);
   displayHistoryList();
@@ -76,12 +65,8 @@ export async function handleDeleteChat(chatId) {
 export function mergeHistories(serverFortunes, pending) {
   const existingIds = new Set(appState.allHistories.map((h) => h.id));
   const newServerFortunes = serverFortunes.filter((sf) => !existingIds.has(sf.id));
-  const newPendingFortunes = pending.filter((pf) => !existingIds.has(pf.id));
-  appState.allHistories = [
-    ...appState.allHistories,
-    ...newPendingFortunes,
-    ...newServerFortunes,
-  ].sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+  appState.allHistories = [...appState.allHistories, ...newServerFortunes]
+    .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
 }
 
 export function mapServerFortunes(fortunes) {

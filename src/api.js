@@ -41,23 +41,7 @@ export async function getAiReplyOnline(userMessage, userInfo) {
   return response.json();
 }
 
-export async function getAiReplyViaChat(userMessage, userInfo) {
-  const response = await fetch(`${appState.apiBase}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: userMessage,
-      userInfo: {
-        name: userInfo.name,
-        birthdate: userInfo.dob,
-        sex: userInfo.gender,
-        topic: userInfo.topicValue,
-      },
-    }),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
+// Removed chat endpoint fallback: rely on DB-backed /fortune only
 
 export async function updateFortuneOnDB(fortuneId, userInfo, newText) {
   try {

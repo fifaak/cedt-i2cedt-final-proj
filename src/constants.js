@@ -6,13 +6,6 @@ export const PLACEHOLDERS = {
   LOADING: "อาจารย์คมกำลังเพ่งดวง...",
 };
 
-export const LS_KEYS = {
-  USER_INFO: "userInfo",
-  PENDING: "pendingFortunes",
-  CHAT_HISTORY: "chatHistory",
-  CURRENT_CHAT: "currentChat",
-};
-
 export const TYPING_MESSAGES = [
   "อาจารย์คมกำลังเพ่งดวง",
   "กำลังอ่านดวงชะตา",

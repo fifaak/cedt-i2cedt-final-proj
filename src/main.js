@@ -1,51 +1,12 @@
 import { elements, bindMenuHandlers } from "./dom.js";
-import { PLACEHOLDERS, LS_KEYS, getTopicDisplayName } from "./constants.js";
+import { PLACEHOLDERS, getTopicDisplayName } from "./constants.js";
 import { appState } from "./state.js";
-import { detectApiBase, getAiReplyOnline, getAiReplyViaChat, updateFortuneOnDB, fetchFortunesFromServer } from "./api.js";
-import { getUserInfoFromForm, saveUserInfoToLocal, loadUserInfoFromLocal, addPendingFortune, findPendingById, setPendingFortunes, getPendingFortunes, saveChatHistoryToLocal, loadChatHistoryFromLocal } from "./storage.js";
-import { displayHistoryList, mapServerFortunes, mergeHistories, handleDeleteChat, loadSpecificChat } from "./history.js";
-import { setChatState, showTypingIndicator, removeTypingIndicator, displayMessage, displayMessageWithTyping } from "./ui.js";
-import { startBackgroundSync } from "./sync.js";
+import { detectApiBase, getAiReplyOnline, updateFortuneOnDB, fetchFortunesFromServer } from "./api.js";
+import { getUserInfoFromForm } from "./storage.js";
+import { displayHistoryList, mapServerFortunes, mergeHistories } from "./history.js";
+import { setChatState, showTypingIndicator, displayMessage, displayMessageWithTyping } from "./ui.js";
 
-function saveCurrentChat() {
-  if (!appState.isUserInfoSubmitted) return;
-  saveUserInfoToLocal();
-  const messages = [];
-  elements.chatContainer.querySelectorAll(".message").forEach((bubble) => {
-    const msgElement = bubble.querySelector("p");
-    if (msgElement && !bubble.classList.contains("typing")) {
-      messages.push({
-        text: msgElement.textContent,
-        type: bubble.classList.contains("sent") ? "sent" : "received",
-      });
-    }
-  });
-  if (messages.length === 0) return;
-  const existingIndex = appState.allHistories.findIndex((h) => h.id === appState.currentChatId);
-  let chatSessionData;
-  if (existingIndex > -1) {
-    chatSessionData = {
-      ...appState.allHistories[existingIndex],
-      lastMessageTime: new Date().toLocaleString("th-TH"),
-      messages,
-      userInfo: getUserInfoFromForm(),
-    };
-    appState.allHistories.splice(existingIndex, 1);
-  } else {
-    const topicText = elements.topicSelect.options[elements.topicSelect.selectedIndex].text;
-    chatSessionData = {
-      id: appState.currentChatId,
-      topic: topicText,
-      lastMessageTime: new Date().toLocaleString("th-TH"),
-      messages,
-      userInfo: getUserInfoFromForm(),
-      source: String(appState.currentChatId).startsWith("local-") ? "local" : "server",
-    };
-  }
-  appState.allHistories.unshift(chatSessionData);
-  displayHistoryList();
-  saveChatHistoryToLocal(appState.allHistories, appState.currentChatId);
-}
+function saveCurrentChat() {}
 
 async function handleSendMessage() {
   if (!appState.isUserInfoSubmitted || appState.isReplying) return;
@@ -66,28 +27,10 @@ async function handleSendMessage() {
     serverId = data.id || null;
     aiPrediction = data.prediction || "";
   } catch (err) {
-    try {
-      const data = await getAiReplyViaChat(userMessage, userInfo);
-      aiPrediction = data.prediction || "";
-    } catch (e2) {
-      aiPrediction = `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${appState.apiBase}). ลองใหม่ภายหลัง`;
-    }
+    aiPrediction = `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${appState.apiBase}). ลองใหม่ภายหลัง`;
   }
   await displayMessageWithTyping(aiPrediction, "received", true, saveCurrentChat);
-  if (serverId) {
-    appState.currentChatId = serverId;
-  } else {
-    if (!appState.currentChatId || !String(appState.currentChatId).startsWith("local-")) {
-      appState.currentChatId = `local-${Date.now()}`;
-    }
-    addPendingFortune({
-      id: appState.currentChatId,
-      userInfo: userInfo,
-      text: userMessage,
-      prediction: aiPrediction,
-      created_at: new Date().toISOString(),
-    });
-  }
+  if (serverId) appState.currentChatId = serverId;
   appState.isReplying = false;
   elements.messageInput.disabled = false;
   elements.sendBtn.disabled = false;
@@ -136,29 +79,15 @@ function resetApplication() {
   elements.chatContainer.innerHTML = "";
   elements.headerTitle.textContent = "ดูดวง";
   setChatState(false);
-  loadUserInfoFromLocal();
   loadFortuneHistory();
-  try { localStorage.removeItem(LS_KEYS.CURRENT_CHAT); } catch (e) {}
 }
 
 async function loadFortuneHistory() {
   const serverFortunesRaw = await fetchFortunesFromServer();
   const serverFortunes = mapServerFortunes(serverFortunesRaw);
-  const pending = getPendingFortunes().map((p) => ({
-    id: p.id,
-    topic: getTopicDisplayName(p.userInfo.topicValue),
-    lastMessageTime: new Date(p.created_at).toLocaleString("th-TH"),
-    messages: [
-      { text: p.text || "", type: "sent" },
-      { text: p.prediction || "", type: "received" },
-    ],
-    userInfo: p.userInfo,
-    source: "local",
-  }));
-  appState.allHistories = loadChatHistoryFromLocal();
-  mergeHistories(serverFortunes, pending);
+  appState.allHistories = [];
+  mergeHistories(serverFortunes, []);
   displayHistoryList();
-  saveChatHistoryToLocal(appState.allHistories, appState.currentChatId);
 }
 
 function bindEvents() {
@@ -187,15 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindMenuHandlers();
   bindEvents();
   detectApiBase().then(() => {
-    loadUserInfoFromLocal();
     loadFortuneHistory();
-    setTimeout(() => {
-      const savedCurrentChat = localStorage.getItem(LS_KEYS.CURRENT_CHAT);
-      if (savedCurrentChat && appState.allHistories.find((h) => h.id === savedCurrentChat)) {
-        import("./history.js").then(({ loadSpecificChat }) => loadSpecificChat(savedCurrentChat));
-      }
-    }, 100);
-    startBackgroundSync();
   });
   setChatState(false);
 });

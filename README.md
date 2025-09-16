@@ -23,8 +23,7 @@ npm start
 ### Technical
 - **Vanilla JavaScript** - No frameworks
 - **Express server** for static files and API proxy
-- **Local storage** for offline functionality
-- **Auto-sync** with backend when available
+- **MongoDB-backed only**: local/offline storage removed
 - **Mobile responsive** design
 
 ## File Structure

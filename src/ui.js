@@ -1,7 +1,6 @@
 import { elements } from "./dom.js";
 import { TYPING_MESSAGES, PLACEHOLDERS } from "./constants.js";
 import { appState } from "./state.js";
-import { findPendingById, setPendingFortunes, getPendingFortunes } from "./storage.js";
 
 export function setChatState(enabled) {
   elements.messageInput.disabled = !enabled;
