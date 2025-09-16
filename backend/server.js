@@ -1,7 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const https = require("https");
-const { MongoSync, Fortune } = require("./services/mongoSync");
+const localStorage = require("./storage/localStorage");
+const { MongoSync } = require("./services/mongoSync");
 require("dotenv").config();
 
 const app = express();
@@ -80,10 +81,10 @@ function makeHttpsRequest(url, options) {
   });
 }
 
-// Initialize Mongo (cloud-only storage)
-console.log("🔄 Initializing MongoDB connection (cloud storage)...");
+// Initialize services
+console.log("🔄 Initializing storage and sync services...");
 const mongoSync = new MongoSync();
-mongoSync.connectToMongo();
+mongoSync.startPeriodicSync(60000); // Sync every 60 seconds
 
 async function getAiPrediction(userInfo, userMessage) {
   const API_KEY = process.env.TYPHOON_API_KEY;
@@ -180,22 +181,20 @@ app.post("/api/fortune", validateFortuneInput, async (req, res) => {
     const userInfo = { name, birthdate, sex, topic };
     const prediction = await getAiPrediction(userInfo, text);
 
-    // Save to MongoDB (cloud)
-    const doc = new Fortune({
+    // Save to local storage
+    const savedFortune = await localStorage.createFortune({
       name: name.trim(),
       birthdate,
       sex,
       topic,
       text: text.trim(),
       prediction,
-      created_at: new Date()
     });
-    const savedFortune = await doc.save();
 
-    console.log(`✅ New fortune created for ${name} (cloud)`);
+    console.log(`✅ New fortune created for ${name}`);
 
     res.status(201).json({
-      id: savedFortune._id,
+      id: savedFortune.id,
       prediction: savedFortune.prediction,
     });
   } catch (error) {
@@ -206,32 +205,22 @@ app.post("/api/fortune", validateFortuneInput, async (req, res) => {
 
 app.get("/api/fortune", async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const limit = parseInt(req.query.limit) || 50; // Default limit
     const page = parseInt(req.query.page) || 1;
-    const skip = (page - 1) * limit;
 
-    const [fortunes, total] = await Promise.all([
-      Fortune.find({}).sort({ created_at: -1 }).skip(skip).limit(limit),
-      Fortune.countDocuments()
-    ]);
+    const result = await localStorage.getFortunes({ limit, page });
 
     res.json({
-      fortunes: fortunes.map((fortune) => ({
-        id: fortune._id,
+      fortunes: result.fortunes.map((fortune) => ({
+        id: fortune.id,
         name: fortune.name,
         birthdate: fortune.birthdate,
         sex: fortune.sex,
         topic: fortune.topic,
-        text: fortune.text,
         prediction: fortune.prediction,
         created_at: fortune.created_at,
       })),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      },
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("❌ Error fetching fortunes:", error);
@@ -241,17 +230,18 @@ app.get("/api/fortune", async (req, res) => {
 
 app.get("/api/fortune/:id", async (req, res) => {
   try {
-    const fortune = await Fortune.findById(req.params.id);
+    const fortune = await localStorage.getFortuneById(req.params.id);
+
     if (!fortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
     }
+
     res.json({
-      id: fortune._id,
+      id: fortune.id,
       name: fortune.name,
       birthdate: fortune.birthdate,
       sex: fortune.sex,
       topic: fortune.topic,
-      text: fortune.text,
       prediction: fortune.prediction,
       created_at: fortune.created_at,
     });
@@ -265,38 +255,35 @@ app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
   try {
     const { name, birthdate, sex, topic, text } = req.body;
 
+    // Get new prediction with updated info
     const userInfo = { name, birthdate, sex, topic };
     const prediction = await getAiPrediction(
       userInfo,
       text || "อัปเดตข้อมูลการดูดวง"
     );
 
-    const updated = await Fortune.findByIdAndUpdate(
-      req.params.id,
-      {
-        name: name.trim(),
-        birthdate,
-        sex,
-        topic,
-        text: text.trim(),
-        prediction,
-      },
-      { new: true }
-    );
+    const updatedFortune = await localStorage.updateFortune(req.params.id, {
+      name: name.trim(),
+      birthdate,
+      sex,
+      topic,
+      text: text.trim(),
+      prediction,
+    });
 
-    if (!updated) {
+    if (!updatedFortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
     }
 
-    console.log(`✅ Fortune updated for ${name} (cloud)`);
+    console.log(`✅ Fortune updated for ${name}`);
 
     res.json({
-      id: updated._id,
-      name: updated.name,
-      birthdate: updated.birthdate,
-      sex: updated.sex,
-      topic: updated.topic,
-      prediction: updated.prediction,
+      id: updatedFortune.id,
+      name: updatedFortune.name,
+      birthdate: updatedFortune.birthdate,
+      sex: updatedFortune.sex,
+      topic: updatedFortune.topic,
+      prediction: updatedFortune.prediction,
     });
   } catch (error) {
     console.error("❌ Error updating fortune:", error);
@@ -306,11 +293,13 @@ app.put("/api/fortune/:id", validateFortuneInput, async (req, res) => {
 
 app.delete("/api/fortune/:id", async (req, res) => {
   try {
-    const deleted = await Fortune.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    const deletedFortune = await localStorage.deleteFortune(req.params.id);
+
+    if (!deletedFortune) {
       return res.status(404).json({ error: "ไม่พบข้อมูลการดูดวง" });
     }
-    console.log(`🗑️  Fortune deleted: ${deleted.name} (cloud)`);
+
+    console.log(`🗑️  Fortune deleted: ${deletedFortune.name}`);
     res.json({ success: true, message: "ลบข้อมูลสำเร็จ" });
   } catch (error) {
     console.error("❌ Error deleting fortune:", error);
@@ -318,10 +307,53 @@ app.delete("/api/fortune/:id", async (req, res) => {
   }
 });
 
-// Chat endpoints are handled in routes/chat via cloud storage
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, userInfo } = req.body;
+
+    if (!message || !userInfo) {
+      return res.status(400).json({
+        error: "กรุณาส่งข้อความและข้อมูลผู้ใช้",
+      });
+    }
+
+    const prediction = await getAiPrediction(userInfo, message);
+
+    res.json({ prediction });
+  } catch (error) {
+    console.error("Error in chat:", error);
+    res.status(500).json({ error: "เกิดข้อผิดพลาดในการสนทนา" });
+  }
+});
 
 // Manual sync endpoint
-// Sync endpoints removed: cloud-only storage, no local sync
+app.post("/api/sync", async (req, res) => {
+  try {
+    const result = await mongoSync.manualSync();
+    res.json({
+      success: result.success,
+      message: result.success ? "Sync completed successfully" : "Sync failed",
+      details: result.results || result.reason,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error in manual sync:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "เกิดข้อผิดพลาดในการซิงค์ข้อมูล",
+      details: error.message 
+    });
+  }
+});
+
+// Sync status endpoint
+app.get("/api/sync/status", (req, res) => {
+  const status = mongoSync.getSyncStatus();
+  res.json({
+    ...status,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -331,11 +363,12 @@ app.get("/api/health", (req, res) => {
     status: "OK",
     timestamp: new Date().toISOString(),
     storage: {
-      type: "cloud",
+      type: "hybrid",
+      local: "connected",
       mongodb: syncStatus.isConnected ? "connected" : "disconnected"
     },
     sync: {
-      active: false,
+      active: syncStatus.syncActive,
       mongoState: syncStatus.mongoState,
       connectionAttempts: syncStatus.connectionAttempts
     },
