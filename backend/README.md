@@ -1,58 +1,81 @@
-# Backend API
-
-Express.js API server for Thai Fortune Telling app with hybrid storage (local + MongoDB sync).
+# Backend - Fortune Chat (Express + Mongo + Typhoon)
 
 ## Setup
 
+1. Copy `.env.example` to `.env` and fill values.
+2. Install deps and run server.
+
+## Environment variables
+
+- `PORT` (default 3001)
+- `MONGO_URI` MongoDB connection string
+- `TYPHOON_API_KEY` Typhoon API key
+- `TYPHOON_MODEL` (default `typhoon-v2.1-12b-instruct`)
+
+## Scripts
+
+- `npm run dev` - run API smoke tests via curl (auto-starts server if needed)
+- `npm start` - start server
+
+## Endpoints
+
+- POST `/api/chat/` Create a new chat message
+- GET `/api/chat/history?name=...&birthdate=YYYY-MM-DD` Get history for user
+- PUT `/api/chat/:id` Edit a previous user message
+
+## Request/Response
+
+POST `/api/chat`
+```json
+{
+  "userInfo": {
+    "name": "Alice",
+    "birthdate": "1995-05-20",
+    "sex": "female",
+    "topic": "career"
+  },
+  "message": "งานปีนี้จะก้าวหน้าไหม?"
+}
+```
+
+Success response includes saved Mongo document with `assistantResponse`.
+
+## Healthcheck
+
+- GET `/health` → `{ "status": "ok" }`
+
+## Local testing
+
+- Ensure MongoDB is running locally, or set `MONGO_URI` to a remote cluster.
+- Put your `TYPHOON_API_KEY` in `.env`.
+- Run: `npm run dev` to execute `scripts/test_api.sh` which will:
+  - Start the server if not running
+  - POST a sample chat, GET history, and PUT an edit
+
+## Frontend integration
+
+- Base URL: `http://localhost:${PORT}` (default `http://localhost:3001`)
+- CORS is enabled with default settings.
+- Example requests:
+
+Create message
 ```bash
-npm install
-npm run dev
+curl -X POST "http://localhost:3001/api/chat" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "userInfo": {"name":"Alice","birthdate":"1995-05-20","sex":"female","topic":"career"},
+    "message": "ปีนี้งานจะก้าวหน้าไหม?"
+  }'
 ```
 
-## Environment (.env)
-
-```
-PORT=3001
-TYPHOON_API_KEY=your_typhoon_api_key_here
-MONGODB_URI=mongodb://localhost:27017/fortune_telling  # Optional
+Get history
+```bash
+curl "http://localhost:3001/api/chat/history?name=Alice&birthdate=1995-05-20"
 ```
 
-## Hybrid Storage System
-
-### Local Storage (Primary)
-Data is always stored locally in JSON files:
-- `storage/data/fortunes.json` - Fortune readings
-- `storage/data/chats.json` - Chat sessions
-
-### MongoDB Sync (Secondary)
-- **Auto-sync**: Checks MongoDB every 60 seconds
-- **Background sync**: Pushes local data to MongoDB when available
-- **No dependency**: App works perfectly without MongoDB
-- **Manual sync**: `POST /api/sync` for immediate sync
-
-### Sync Status
-- `GET /api/sync/status` - Check sync status
-- `GET /api/health` - Overall system health including sync status
-
-## API Endpoints
-
-### Fortune Management
-- `POST /api/fortune` - Create fortune reading
-- `GET /api/fortune` - Get all fortunes (paginated)
-- `GET /api/fortune/:id` - Get specific fortune
-- `PUT /api/fortune/:id` - Update fortune
-- `DELETE /api/fortune/:id` - Delete fortune
-
-### Chat System
-- `POST /api/chat` - Chat with AI (no storage)
-- `POST /api/chat/` - Create chat session
-- `GET /api/chat/user/:userId` - Get user chats
-- `GET /api/chat/:chatId` - Get specific chat
-- `POST /api/chat/:chatId/messages` - Add message
-- `PUT /api/chat/:chatId/messages/:index` - Edit message
-- `DELETE /api/chat/:chatId` - Delete chat
-
-### System
-- `GET /api/health` - System health
-- `POST /api/sync` - Manual sync
-- `GET /api/sync/status` - Sync status
+Edit message
+```bash
+curl -X PUT "http://localhost:3001/api/chat/REPLACE_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"newMessage":"ถ้าเปลี่ยนงานตอนนี้เหมาะไหม?"}'
+```
